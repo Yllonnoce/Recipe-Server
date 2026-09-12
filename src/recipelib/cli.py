@@ -318,7 +318,8 @@ WantedBy=default.target
         except OSError:
             pass
         _run(["launchctl", "bootout", f"gui/{uid}/com.recipelib.server"], quiet=True)
-        _run(["launchctl", "enable", f"gui/{uid}/com.recipelib.server"], quiet=True)
+        for dom in ("user", "gui"):          # which domain accepts enable varies by macOS version
+            _run(["launchctl", "enable", f"{dom}/{uid}/com.recipelib.server"], quiet=True)
         if _run(["launchctl", "bootstrap", f"gui/{uid}", str(sp["plist"])]) != 0:
             _run(["launchctl", "load", "-w", str(sp["plist"])])
         _run(["launchctl", "kickstart", f"gui/{uid}/com.recipelib.server"], quiet=True)
@@ -383,7 +384,7 @@ def service_status():
                 pass
             d = subprocess.run(["launchctl", "print-disabled", f"gui/{os.getuid()}"], capture_output=True, text=True).stdout
             if '"com.recipelib.server" => disabled' in d or '"com.recipelib.server" => true' in d:
-                typer.echo("cause: the agent is on launchd's disabled list. Fix: launchctl enable gui/$(id -u)/com.recipelib.server")
+                typer.echo("cause: the agent is on launchd's disabled list. Fix: launchctl enable user/$(id -u)/com.recipelib.server")
             raise typer.Exit(code=1)
         state = "running" if "state = running" in r.stdout else "loaded (not running)"
         pid = next((ln.split("=")[1].strip() for ln in r.stdout.splitlines() if ln.strip().startswith("pid =")), "?")
