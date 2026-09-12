@@ -6,6 +6,7 @@ rem   install.bat /service     ...and start at login (Task Scheduler, no window)
 rem   install.bat /firewall    open TCP 8000, 8631 and UDP 5353 in Windows Firewall (admin prompt)
 rem   install.bat /nomodel     skip the Ollama model download
 rem   install.bat /nobrowser   skip the Chromium download
+rem   install.bat /port80      serve the web app on port 80 (so the address is just http://<pc>)
 rem
 rem Nothing is installed system-wide except (optionally) Ollama and the firewall rules.
 setlocal EnableExtensions EnableDelayedExpansion
@@ -16,12 +17,14 @@ set SERVICE=0
 set FIREWALL=0
 set MODEL=1
 set BROWSER=1
+set PORT80=0
 :args
 if "%~1"=="" goto argsdone
 if /i "%~1"=="/service" set SERVICE=1
 if /i "%~1"=="/firewall" set FIREWALL=1
 if /i "%~1"=="/nomodel" set MODEL=0
 if /i "%~1"=="/nobrowser" set BROWSER=0
+if /i "%~1"=="/port80" set PORT80=1
 if /i "%~1"=="/?" goto help
 shift
 goto args
@@ -89,12 +92,19 @@ if "%MODEL%"=="1" (
 echo.
 echo ==^> Writing the config file and creating %USERPROFILE%\RecipeLibrary
 "%RECIPES%" init
+if "%PORT80%"=="1" (
+  echo     Web app on port 80
+  "%RECIPES%" config set port 80
+  set "WEBPORT="
+) else (
+  set "WEBPORT=:8000"
+)
 "%RECIPES%" doctor
 
 if "%FIREWALL%"=="1" (
   echo.
   echo ==^> Opening the web, printer and discovery ports in Windows Firewall ^(admin prompt^)
-  powershell -NoProfile -Command "Start-Process cmd -Verb RunAs -Wait -ArgumentList '/c netsh advfirewall firewall add rule name=\"Recipe Library web\" dir=in action=allow protocol=TCP localport=8000 profile=private & netsh advfirewall firewall add rule name=\"Recipe Library printer\" dir=in action=allow protocol=TCP localport=8631 profile=private & netsh advfirewall firewall add rule name=\"Recipe Library discovery\" dir=in action=allow protocol=UDP localport=5353 profile=private'"
+  powershell -NoProfile -Command "Start-Process cmd -Verb RunAs -Wait -ArgumentList '/c netsh advfirewall firewall add rule name=\"Recipe Library web\" dir=in action=allow protocol=TCP localport=80,8000 profile=private & netsh advfirewall firewall add rule name=\"Recipe Library printer\" dir=in action=allow protocol=TCP localport=8631 profile=private & netsh advfirewall firewall add rule name=\"Recipe Library discovery\" dir=in action=allow protocol=UDP localport=5353 profile=private'"
 ) else (
   echo.
   echo !!  Other devices need Windows Firewall to allow TCP 8000, 8631 and UDP 5353 on the Private profile.
@@ -116,10 +126,10 @@ if not defined IP set "IP=localhost"
 echo.
 echo ==^> Installed.
 if "%SERVICE%"=="1" (
-  echo     The server is running:  http://%IP%:8000
+  echo     The server is running:  http://%IP%%WEBPORT%
 ) else (
   echo     Start it with:          "%RECIPES%" serve
-  echo     then open:              http://%IP%:8000
+  echo     then open:              http://%IP%%WEBPORT%
   echo     ^(re-run with /service to start it at login automatically^)
 )
 echo     Printer for other devices: 'Recipe Library'  ^(ipp://%IP%:8631/ipp/print^)

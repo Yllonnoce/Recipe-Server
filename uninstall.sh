@@ -58,6 +58,17 @@ if [ "$OS" = "Linux" ] && have ufw && sudo -n ufw status 2>/dev/null | grep -q "
   sudo ufw delete allow 8000/tcp >/dev/null 2>&1; sudo ufw delete allow 8631/tcp >/dev/null 2>&1; sudo ufw delete allow 5353/udp >/dev/null 2>&1
 fi
 
+# ---------------------------------------------------------------- nginx site
+if [ -e /etc/nginx/sites-enabled/recipelib ] || [ -e /etc/nginx/conf.d/recipelib.conf ]; then
+  say "Removing the nginx site (nginx itself stays installed)"
+  sudo rm -f /etc/nginx/sites-enabled/recipelib /etc/nginx/sites-available/recipelib /etc/nginx/conf.d/recipelib.conf
+  sudo nginx -t >/dev/null 2>&1 && sudo systemctl reload nginx || true
+fi
+if [ "$OS" = "Darwin" ] && have brew && [ -e "$(brew --prefix)/etc/nginx/servers/recipelib.conf" ]; then
+  say "Removing the nginx site (nginx itself stays installed)"
+  rm -f "$(brew --prefix)/etc/nginx/servers/recipelib.conf"; sudo brew services restart nginx 2>/dev/null || true
+fi
+
 # ---------------------------------------------------------------- app + config
 if [ -d "$HERE/.venv" ]; then
   say "Removing the Python environment $HERE/.venv"

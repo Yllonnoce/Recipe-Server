@@ -8,7 +8,7 @@ from pathlib import Path
 import typer
 
 from . import __version__
-from .config import config_path, get_settings, write_default_config
+from .config import Settings, config_path, get_settings, write_default_config
 
 cli = typer.Typer(add_completion=False, help="Recipe Library home server.")
 
@@ -155,8 +155,43 @@ def printer_test(uri: str | None = typer.Option(None, help="ipp://host:port/ipp/
     typer.echo("Check the Add page in the web UI; the job should appear within a few seconds.")
 
 
+config_cli = typer.Typer(help="Read or change the config file.")
+cli.add_typer(config_cli, name="config")
+
+
+@config_cli.command("show")
+def config_show():
+    """Print the config file."""
+    p = config_path()
+    typer.echo(f"# {p}")
+    typer.echo(p.read_text(encoding="utf-8") if p.exists() else "# (no config file yet; run: recipes init)")
+
+
+@config_cli.command("set")
+def config_set(key: str, value: str):
+    """Set one key, e.g. `recipes config set port 80`. Keeps the rest of the file."""
+    import re
+    p = config_path()
+    if not p.exists():
+        write_default_config()
+    text = p.read_text(encoding="utf-8")
+    if key not in Settings.model_fields:
+        raise typer.BadParameter(f"unknown key {key}; known: {', '.join(Settings.model_fields)}")
+    if value.lower() in ("true", "false"):
+        lit = value.lower()
+    elif re.fullmatch(r"-?\d+(\.\d+)?", value):
+        lit = value
+    else:
+        lit = '"' + value.replace('"', '\\"') + '"'
+    line = f"{key} = {lit}"
+    pat = re.compile(rf"^{re.escape(key)}\s*=.*$", re.M)
+    text = pat.sub(line, text, count=1) if pat.search(text) else text.rstrip("\n") + f"\n{line}\n"
+    p.write_text(text, encoding="utf-8")
+    typer.echo(line)
+
+
 @cli.command("service-template")
-def service_template(kind: str = typer.Argument(..., help="systemd | launchd | windows-task | avahi")):
+def service_template(kind: str = typer.Argument(..., help="systemd | launchd | windows-task | nginx | avahi")):
     """Print a service definition for this machine's paths."""
     cfg = get_settings()
     exe = Path(sys.executable).parent / ("recipes.exe" if sys.platform == "win32" else "recipes")
@@ -189,6 +224,33 @@ WantedBy=default.target
         typer.echo(f"""schtasks /Create /TN "Recipe Library" /SC ONSTART /RU "%USERNAME%" /RL LIMITED ^
   /TR "\\"{exe}\\" serve" /F
 rem Or install as a true service with NSSM:  nssm install RecipeLibrary "{exe}" serve""")
+    elif kind == "nginx":
+        typer.echo(f"""# Recipe Library behind nginx on port 80 -> the app on 127.0.0.1:{cfg.port}
+server {{
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    # big PDF and photo uploads (the app itself caps at 300 MB) and slow captures
+    client_max_body_size 500m;
+    proxy_request_buffering off;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+
+    location / {{
+        proxy_pass http://127.0.0.1:{cfg.port};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+    }}
+}}
+# Debian/Ubuntu: /etc/nginx/sites-available/recipelib (+ symlink in sites-enabled, remove 'default')
+# Fedora/RHEL:   /etc/nginx/conf.d/recipelib.conf
+# macOS (brew):  $(brew --prefix)/etc/nginx/servers/recipelib.conf
+# then: sudo nginx -t && sudo systemctl reload nginx""")
     elif kind == "avahi":
         typer.echo(f"""<?xml version="1.0" standalone='no'?>
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
@@ -202,7 +264,7 @@ rem Or install as a true service with NSSM:  nssm install RecipeLibrary "{exe}" 
 </service-group>
 <!-- save as /etc/avahi/services/recipelib.service if python-zeroconf and avahi conflict -->""")
     else:
-        raise typer.BadParameter("kind must be systemd, launchd, windows-task or avahi")
+        raise typer.BadParameter("kind must be systemd, launchd, windows-task, nginx or avahi")
 
 
 @cli.callback(invoke_without_command=True)

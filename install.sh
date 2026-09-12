@@ -5,6 +5,7 @@
 #   ./install.sh --service       ...and start at login (systemd user unit / launchd agent)
 #   ./install.sh --no-model      skip the Ollama model download
 #   ./install.sh --no-browser    skip the Chromium download (URL capture disabled until you run it)
+#   ./install.sh --nginx         put nginx in front on port 80 (large uploads, long timeouts); needs sudo
 #
 # Nothing is installed system-wide except (optionally, with your sudo password) the
 # Chromium shared libraries on Linux, Ollama, and a firewall rule.
@@ -13,13 +14,14 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
 OS="$(uname -s)"
-SERVICE=0; MODEL=1; BROWSER=1
+SERVICE=0; MODEL=1; BROWSER=1; NGINX=0
 for a in "$@"; do
   case "$a" in
     --service) SERVICE=1 ;;
     --no-model) MODEL=0 ;;
     --no-browser) BROWSER=0 ;;
-    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    --nginx) NGINX=1 ;;
+    -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
     *) echo "unknown option: $a" >&2; exit 2 ;;
   esac
 done
@@ -97,6 +99,36 @@ if [ "$OS" = "Linux" ] && have ufw && sudo -n ufw status 2>/dev/null | grep -q "
   sudo ufw allow 8000/tcp >/dev/null && sudo ufw allow 8631/tcp >/dev/null && sudo ufw allow 5353/udp >/dev/null || warn "could not change ufw; open TCP 8000, 8631 and UDP 5353 yourself"
 fi
 
+# ---------------------------------------------------------------- nginx on port 80
+if [ "$NGINX" = 1 ]; then
+  say "Putting nginx in front of the app on port 80"
+  if ! have nginx; then
+    if have apt-get; then sudo apt-get install -y nginx
+    elif have dnf; then sudo dnf install -y nginx
+    elif have brew; then brew install nginx
+    else warn "install nginx with your package manager, then re-run with --nginx"; fi
+  fi
+  if have nginx; then
+    CONF="$("$HERE/.venv/bin/recipes" service-template nginx | sed '/^#/d')"
+    if [ "$OS" = "Darwin" ]; then
+      NGX_DIR="$(brew --prefix 2>/dev/null)/etc/nginx/servers"; mkdir -p "$NGX_DIR"
+      printf '%s\n' "$CONF" > "$NGX_DIR/recipelib.conf"
+      sudo brew services restart nginx || warn "start nginx as root so it can use port 80: sudo brew services start nginx"
+    elif [ -d /etc/nginx/sites-available ]; then
+      printf '%s\n' "$CONF" | sudo tee /etc/nginx/sites-available/recipelib >/dev/null
+      sudo ln -sf /etc/nginx/sites-available/recipelib /etc/nginx/sites-enabled/recipelib
+      [ -e /etc/nginx/sites-enabled/default ] && sudo rm -f /etc/nginx/sites-enabled/default && warn "removed nginx's placeholder 'default' site so port 80 is ours"
+      sudo nginx -t && sudo systemctl enable --now nginx && sudo systemctl reload nginx
+    else
+      printf '%s\n' "$CONF" | sudo tee /etc/nginx/conf.d/recipelib.conf >/dev/null
+      sudo nginx -t && sudo systemctl enable --now nginx && sudo systemctl reload nginx
+    fi
+    if [ "$OS" = "Linux" ] && have ufw && sudo -n ufw status 2>/dev/null | grep -q "Status: active"; then sudo ufw allow 80/tcp >/dev/null; fi
+    # the app itself stays on 127.0.0.1 behind the proxy
+    "$HERE/.venv/bin/recipes" config set host 127.0.0.1 >/dev/null
+  fi
+fi
+
 # ---------------------------------------------------------------- service
 if [ "$SERVICE" = 1 ]; then
   if [ "$OS" = "Linux" ]; then
@@ -122,11 +154,12 @@ fi
 # ---------------------------------------------------------------- done
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"; [ -n "$IP" ] || IP="$(ipconfig getifaddr en0 2>/dev/null || echo localhost)"
 say "Installed."
+WEB="http://$IP:8000"; [ "$NGINX" = 1 ] && WEB="http://$IP"
 if [ "$SERVICE" = 1 ]; then
-  echo "    The server is running:  http://$IP:8000"
+  echo "    The server is running:  $WEB"
 else
   echo "    Start it with:          $HERE/.venv/bin/recipes serve"
-  echo "    then open:              http://$IP:8000"
+  echo "    then open:              $WEB"
   echo "    (re-run with --service to start it at login automatically)"
 fi
 echo "    Printer for other devices: 'Recipe Library'  (ipp://$IP:8631/ipp/print)"

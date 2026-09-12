@@ -24,6 +24,20 @@ prompts the first time the server starts.
 
 Re-running the installer is safe: it upgrades the app in place and keeps your library.
 
+### Port 80 (so the address is just `http://recipes.local`)
+
+Linux / macOS: add `--nginx`. The installer installs nginx if needed and writes a site that
+forwards port 80 to the app, with `client_max_body_size 500m` and ten-minute timeouts so big
+PDF and photo uploads and slow captures get through. The app itself then listens only on
+127.0.0.1:8000 behind the proxy. `recipes service-template nginx` prints the site file if
+you want to place it yourself.
+
+Windows: add `/port80`. Windows lets a normal user bind port 80, so no proxy is needed; the
+app simply listens there (and `/firewall` opens it).
+
+Any setting can be changed later with `recipes config set <key> <value>`, e.g.
+`recipes config set port 80`, then restart the server.
+
 ## Manual install
 
 If you'd rather do it by hand:
