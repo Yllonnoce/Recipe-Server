@@ -38,7 +38,6 @@ def serve(host: str | None = None, port: int | None = None, ipp_port: int | None
           no_printer: bool = typer.Option(False, "--no-printer"), reload: bool = False,
           dump_ipp: Path | None = typer.Option(None, help="write raw IPP requests here (debugging)")):
     """Run the web app, capture workers and virtual printer."""
-    import os
     if host:
         os.environ["RECIPELIB_HOST"] = host
     if port:
@@ -133,7 +132,6 @@ def _restart_service() -> None:
     elif sys.platform == "darwin":
         plist = Path.home() / "Library/LaunchAgents/com.recipelib.server.plist"
         if plist.exists():
-            import os
             subprocess.run(["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/com.recipelib.server"])
             typer.echo("restarted the launchd agent")
             return
@@ -295,7 +293,6 @@ WantedBy=default.target
 """)
         _run(["systemctl", "--user", "daemon-reload"])
         _run(["systemctl", "--user", "enable", "--now", "recipelib"])
-        import os
         if _run(["loginctl", "enable-linger", os.environ.get("USER", "")], quiet=True) != 0:
             typer.echo("note: run `sudo loginctl enable-linger $USER` so the service keeps running after you log out")
         typer.echo(f"installed {sp['unit']}\nstatus: systemctl --user status recipelib   logs: journalctl --user -u recipelib -f")
