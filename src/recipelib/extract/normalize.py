@@ -266,3 +266,27 @@ def format_quantity(q: float | None, unit: str | None = None) -> str:
         return str(whole)
     frac = glyph.get(part, f"{part.numerator}/{part.denominator}")
     return f"{whole} {frac}" if whole else frac
+
+
+_PREP = re.compile(r"\bprep(?:aration)?(?:\s*time)?\s*[:\-]?\s*(\d+)\s*(h|hr|hrs|hour|hours|m|min|mins|minutes?)\b", re.I)
+_COOK = re.compile(r"\b(?:cook|cooking|bake|baking)(?:\s*time)?\s*[:\-]?\s*(\d+)\s*(h|hr|hrs|hour|hours|m|min|mins|minutes?)\b", re.I)
+_TOTAL = re.compile(r"\btotal(?:\s*time)?\s*[:\-]?\s*(\d+)\s*(h|hr|hrs|hour|hours|m|min|mins|minutes?)\b", re.I)
+_SERVES = re.compile(r"\b(?:serves|servings?|makes|yield[s]?)\s*[:\-]?\s*(\d+)\b", re.I)
+
+
+def _mins(m) -> int | None:
+    if not m:
+        return None
+    n = int(m.group(1))
+    return n * 60 if m.group(2).lower().startswith("h") else n
+
+
+def detect_times(text: str) -> dict:
+    """Prep/cook/total minutes and servings from header lines like
+    'Serves 4 · Prep 15 min · Cook 45 min'. Used when the extractor left them blank."""
+    head = (text or "")[:6000]
+    out = {"prep_min": _mins(_PREP.search(head)), "cook_min": _mins(_COOK.search(head)),
+           "total_min": _mins(_TOTAL.search(head))}
+    m = _SERVES.search(head)
+    out["servings"] = float(m.group(1)) if m else None
+    return out

@@ -1,6 +1,6 @@
 import pytest
 
-from recipelib.extract.normalize import (detect_minutes, format_quantity, normalize_name,
+from recipelib.extract.normalize import (detect_minutes, detect_times, format_quantity, normalize_name,
                                          parse_ingredient_block, parse_line)
 
 
@@ -59,3 +59,9 @@ def test_format_quantity():
     assert format_quantity(3.0) == "3"
     assert format_quantity(250.0, "g") == "250"
     assert format_quantity(2.333, "cup") == "2 ⅓"
+
+
+def test_detect_times_header_line():
+    t = detect_times("Lemon Chicken\nServes 4 · Prep 15 min · Cook 1 hour\nIngredients")
+    assert t == {"prep_min": 15, "cook_min": 60, "total_min": None, "servings": 4.0}
+    assert detect_times("no numbers here")["prep_min"] is None

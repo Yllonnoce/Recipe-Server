@@ -21,15 +21,12 @@ from ..db import fts
 from ..db.engine import session_scope
 from ..db.models import Asset, CaptureJob, Recipe, utcnow
 from ..domain import recipes as R
+from ..extract.llm import LLMUnavailable
 from ..extract.normalize import detect_minutes, parse_line
 from . import pdf as pdfops
 from .dedup import normalize_url, site_name
 
 log = logging.getLogger(__name__)
-
-
-class LLMUnavailable(Exception):
-    """Raised by the llm stage when Ollama can't be reached; the queue defers the job."""
 
 
 class JobCanceled(Exception):
@@ -349,6 +346,14 @@ def stage_normalize(ctx: Ctx):
         r.cook_min = _num_int(d.get("cook_minutes"))
         r.total_min = _num_int(d.get("total_minutes")) or (
             (r.prep_min or 0) + (r.cook_min or 0) or None)
+        if r.prep_min is None or r.cook_min is None or r.servings is None:
+            from ..extract.normalize import detect_times
+            found = detect_times("\n".join(ctx.page_texts))
+            r.prep_min = r.prep_min if r.prep_min is not None else found["prep_min"]
+            r.cook_min = r.cook_min if r.cook_min is not None else found["cook_min"]
+            r.servings = r.servings if r.servings is not None else found["servings"]
+            if r.total_min is None:
+                r.total_min = found["total_min"] or ((r.prep_min or 0) + (r.cook_min or 0) or None)
         r.language = d.get("language") or r.language
         r.confidence = _num(d.get("confidence"))
         r.extraction_method = d.get("method") or "llm"
@@ -357,8 +362,14 @@ def stage_normalize(ctx: Ctx):
             raw = (it.get("raw") or it.get("name") or "").strip()
             if not raw:
                 continue
+            # "For the sauce: 1/2 cup stock" -> group + line (models like to glue headings on)
+            m = re.match(r"^([A-Za-z][^:\d]{2,40}):\s+(\S.*)$", raw)
+            if m and not it.get("group"):
+                it["group"], raw = m.group(1).strip(), m.group(2).strip()
             parsed = parse_line(raw)
             q = _num(it.get("quantity"))
+            if q is not None and q <= 0:
+                q = None
             # trust the model only if its number actually appears in the line
             if q is not None and parsed.quantity is not None and abs(q - parsed.quantity) > 1e-6:
                 q = parsed.quantity
@@ -368,11 +379,14 @@ def stage_normalize(ctx: Ctx):
             from ..extract.normalize import canonical_unit, normalize_name
             unit = canonical_unit(unit) or parsed.unit
             name = (it.get("name") or parsed.name or raw).strip()
+            prep = it.get("preparation") or parsed.preparation
+            if prep and prep.lower() in name.lower():
+                name = re.sub(r",?\s*" + re.escape(prep) + r"\s*$", "", name, flags=re.I).strip(" ,") or name
             ing_rows.append({
                 "group_name": it.get("group") or None, "raw_text": raw, "quantity": q,
                 "quantity_max": _num(it.get("quantity_max")) or parsed.quantity_max,
                 "unit": unit, "unit_raw": parsed.unit_raw, "name": name,
-                "name_norm": normalize_name(name), "preparation": it.get("preparation") or parsed.preparation,
+                "name_norm": normalize_name(name), "preparation": prep,
                 "optional": 1 if it.get("optional") or parsed.optional else 0,
             })
         step_rows = []
