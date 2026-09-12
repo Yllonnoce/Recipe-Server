@@ -309,9 +309,19 @@ WantedBy=default.target
 </dict></plist>
 """)
         uid = os.getuid()
+        # launchd ignores agents the user does not own, and refuses ones on its disabled list
+        try:
+            os.chmod(sp["plist"], 0o644)
+            if sp["plist"].stat().st_uid != uid:
+                typer.echo(f"!! {sp['plist']} is not owned by you (installed with sudo?). Fix with:\n"
+                           f"   sudo chown {os.environ.get('USER', '$USER')} \"{sp['plist']}\"", err=True)
+        except OSError:
+            pass
         _run(["launchctl", "bootout", f"gui/{uid}/com.recipelib.server"], quiet=True)
+        _run(["launchctl", "enable", f"gui/{uid}/com.recipelib.server"], quiet=True)
         if _run(["launchctl", "bootstrap", f"gui/{uid}", str(sp["plist"])]) != 0:
             _run(["launchctl", "load", "-w", str(sp["plist"])])
+        _run(["launchctl", "kickstart", f"gui/{uid}/com.recipelib.server"], quiet=True)
         typer.echo(f"installed {sp['plist']}\nstatus: recipes service status   stop: recipes service remove")
     elif sys.platform == "win32":
         launcher = sp["pythonw"] if sp["pythonw"].exists() else sp["exe"]
@@ -358,8 +368,27 @@ def service_status():
             raise typer.Exit(code=1)
         _run(["systemctl", "--user", "--no-pager", "status", "recipelib"])
     elif sys.platform == "darwin":
-        typer.echo("installed" if sp["plist"].exists() else "not installed (recipes service install)")
-        _run(["launchctl", "list", "com.recipelib.server"])
+        if not sp["plist"].exists():
+            typer.echo("not installed (recipes service install)")
+            raise typer.Exit(code=1)
+        import subprocess
+        r = subprocess.run(["launchctl", "print", f"gui/{os.getuid()}/com.recipelib.server"], capture_output=True, text=True)
+        if r.returncode != 0:
+            typer.echo("installed but NOT loaded into your session. Run: recipes service install")
+            try:
+                st = sp["plist"].stat()
+                if st.st_uid != os.getuid():
+                    typer.echo(f"cause: {sp['plist']} is owned by uid {st.st_uid}, not you. Fix: sudo chown $USER \"{sp['plist']}\"")
+            except OSError:
+                pass
+            d = subprocess.run(["launchctl", "print-disabled", f"gui/{os.getuid()}"], capture_output=True, text=True).stdout
+            if '"com.recipelib.server" => disabled' in d or '"com.recipelib.server" => true' in d:
+                typer.echo("cause: the agent is on launchd's disabled list. Fix: launchctl enable gui/$(id -u)/com.recipelib.server")
+            raise typer.Exit(code=1)
+        state = "running" if "state = running" in r.stdout else "loaded (not running)"
+        pid = next((ln.split("=")[1].strip() for ln in r.stdout.splitlines() if ln.strip().startswith("pid =")), "?")
+        typer.echo(f"{state}, pid {pid}")
+        typer.echo(f"log: {Path.home() / 'RecipeLibrary/logs/launchd.log'}")
     elif sys.platform == "win32":
         _run(["schtasks", "/Query", "/TN", sp["task"], "/FO", "LIST"])
 
