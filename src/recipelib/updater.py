@@ -166,7 +166,12 @@ def restart_server() -> None:
     re-exec this process so the new code loads."""
     try:
         if os.environ.get("INVOCATION_ID") and shutil.which("systemctl"):
-            subprocess.Popen(["systemctl", "--user", "restart", "recipelib"])
+            scope = [] if Path("/etc/systemd/system/recipelib.service").exists() else ["--user"]
+            subprocess.Popen(["systemctl", *scope, "restart", "recipelib"])
+            return
+        if sys.platform == "darwin" and Path("/Library/LaunchDaemons/com.recipelib.server.plist").exists():
+            # KeepAlive brings the daemon straight back after we exit
+            threading.Timer(0.5, lambda: os._exit(0)).start()
             return
         if sys.platform == "darwin" and os.environ.get("XPC_SERVICE_NAME", "").startswith("com.recipelib"):
             subprocess.Popen(["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/com.recipelib.server"])

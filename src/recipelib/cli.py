@@ -124,6 +124,10 @@ def update(no_restart: bool = typer.Option(False, "--no-restart", help="don't re
 def _restart_service() -> None:
     import shutil
     import subprocess
+    if sys.platform.startswith("linux") and SYSTEM_UNIT.exists():
+        _sudo(["systemctl", "restart", "recipelib"]); typer.echo("restarted the system service"); return
+    if sys.platform == "darwin" and SYSTEM_PLIST.exists():
+        _sudo(["launchctl", "kickstart", "-k", "system/com.recipelib.server"]); typer.echo("restarted the system daemon"); return
     if sys.platform.startswith("linux") and shutil.which("systemctl"):
         if subprocess.run(["systemctl", "--user", "is-enabled", "recipelib"], capture_output=True).returncode == 0:
             subprocess.run(["systemctl", "--user", "restart", "recipelib"])
@@ -266,14 +270,85 @@ def _run(cmd: list[str], quiet: bool = False) -> int:
     return r.returncode
 
 
+SYSTEM_UNIT = Path("/etc/systemd/system/recipelib.service")
+SYSTEM_PLIST = Path("/Library/LaunchDaemons/com.recipelib.server.plist")
+
+
+def _sudo(cmd: list[str]) -> int:
+    import subprocess
+    return subprocess.run(["sudo", *cmd]).returncode
+
+
+def _install_system() -> None:
+    """A boot-time system service that runs the app as this user (no login needed).
+    Needs sudo for the few privileged steps; asks in the terminal."""
+    import subprocess
+    import tempfile
+    sp = _service_paths()
+    user = os.environ.get("USER") or os.environ.get("LOGNAME") or ""
+    home = Path.home()
+    if sys.platform.startswith("linux"):
+        unit = f"""[Unit]
+Description=Recipe Library
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User={user}
+Environment=HOME={home}
+WorkingDirectory={home}
+ExecStart={sp['exe']} serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+"""
+        tmp = Path(tempfile.mkstemp(suffix=".service")[1]); tmp.write_text(unit)
+        _sudo(["install", "-m", "644", str(tmp), str(SYSTEM_UNIT)]); tmp.unlink()
+        _sudo(["systemctl", "daemon-reload"])
+        _sudo(["systemctl", "enable", "--now", "recipelib"])
+        typer.echo(f"installed {SYSTEM_UNIT} (starts at boot as {user})\nstatus: systemctl status recipelib")
+    elif sys.platform == "darwin":
+        plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.recipelib.server</string>
+  <key>ProgramArguments</key><array><string>{sp['exe']}</string><string>serve</string></array>
+  <key>UserName</key><string>{user}</string>
+  <key>EnvironmentVariables</key><dict><key>HOME</key><string>{home}</string><key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string></dict>
+  <key>WorkingDirectory</key><string>{home}</string>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>{home / 'RecipeLibrary/logs/launchd.log'}</string>
+  <key>StandardErrorPath</key><string>{home / 'RecipeLibrary/logs/launchd.log'}</string>
+</dict></plist>
+"""
+        tmp = Path(tempfile.mkstemp(suffix=".plist")[1]); tmp.write_text(plist)
+        # a login agent with the same label would fight the daemon; take it out
+        _run(["launchctl", "bootout", f"gui/{os.getuid()}/com.recipelib.server"], quiet=True)
+        if sp["plist"].exists():
+            sp["plist"].unlink()
+        _sudo(["launchctl", "bootout", "system/com.recipelib.server"])
+        _sudo(["install", "-o", "root", "-g", "wheel", "-m", "644", str(tmp), str(SYSTEM_PLIST)]); tmp.unlink()
+        _sudo(["launchctl", "enable", "system/com.recipelib.server"])
+        if _sudo(["launchctl", "bootstrap", "system", str(SYSTEM_PLIST)]) != 0:
+            _sudo(["launchctl", "load", "-w", str(SYSTEM_PLIST)])
+        typer.echo(f"installed {SYSTEM_PLIST} (starts at boot, runs as {user}, no login needed)\nstatus: recipes service status")
+    else:
+        raise typer.Exit("--system is for Linux and macOS; on Windows the scheduled task already starts at logon")
+
+
 @service_cli.command("install")
-def service_install():
+def service_install(system: bool = typer.Option(False, "--system", help="start at boot without anyone logging in (Linux/macOS, asks for sudo)")):
     """Install and start the service (systemd user unit / launchd agent / Task Scheduler)."""
     import subprocess
     sp = _service_paths()
     if sys.platform != "win32" and os.geteuid() == 0:
-        typer.echo("!! Run this as your own user, not root/sudo: the service is a per-user agent.", err=True)
+        typer.echo("!! Run this as your own user, not root/sudo (add --system for a boot-time service; it asks for sudo itself).", err=True)
         raise typer.Exit(code=1)
+    if system:
+        _install_system()
+        return
     if sys.platform.startswith("linux"):
         import shutil
         if not shutil.which("systemctl"):
@@ -339,8 +414,14 @@ WantedBy=default.target
 
 @service_cli.command("remove")
 def service_remove():
-    """Stop and remove the service. The app and your recipes stay."""
+    """Stop and remove the service (user or system). The app and your recipes stay."""
     sp = _service_paths()
+    if sys.platform.startswith("linux") and SYSTEM_UNIT.exists():
+        _sudo(["systemctl", "disable", "--now", "recipelib"]); _sudo(["rm", "-f", str(SYSTEM_UNIT)]); _sudo(["systemctl", "daemon-reload"])
+        typer.echo("removed the system service")
+    if sys.platform == "darwin" and SYSTEM_PLIST.exists():
+        _sudo(["launchctl", "bootout", "system/com.recipelib.server"]); _sudo(["rm", "-f", str(SYSTEM_PLIST)])
+        typer.echo("removed the system daemon")
     if sys.platform.startswith("linux"):
         _run(["systemctl", "--user", "disable", "--now", "recipelib"], quiet=True)
         if sp["unit"].exists():
@@ -363,6 +444,21 @@ def service_remove():
 def service_status():
     """Is the service installed and running?"""
     sp = _service_paths()
+    if sys.platform.startswith("linux") and SYSTEM_UNIT.exists():
+        _run(["systemctl", "--no-pager", "status", "recipelib"])
+        return
+    if sys.platform == "darwin" and SYSTEM_PLIST.exists():
+        import subprocess
+        r = subprocess.run(["sudo", "-n", "launchctl", "print", "system/com.recipelib.server"], capture_output=True, text=True)
+        if r.returncode != 0:
+            r = subprocess.run(["launchctl", "print", "system/com.recipelib.server"], capture_output=True, text=True)
+        if r.returncode != 0:
+            typer.echo("system daemon installed but not loaded. Run: recipes service install --system")
+            raise typer.Exit(code=1)
+        pid = next((ln.split("=")[1].strip() for ln in r.stdout.splitlines() if ln.strip().startswith("pid =")), "?")
+        typer.echo(f"system daemon {'running' if 'state = running' in r.stdout else 'loaded'}, pid {pid} (starts at boot)")
+        typer.echo(f"log: {Path.home() / 'RecipeLibrary/logs/launchd.log'}")
+        return
     if sys.platform.startswith("linux"):
         if not sp["unit"].exists():
             typer.echo("not installed (recipes service install)")
@@ -375,7 +471,9 @@ def service_status():
         import subprocess
         r = subprocess.run(["launchctl", "print", f"gui/{os.getuid()}/com.recipelib.server"], capture_output=True, text=True)
         if r.returncode != 0:
-            typer.echo("installed but NOT loaded into your session. Run: recipes service install")
+            typer.echo("installed but NOT loaded into your session. Run: recipes service install\n"
+                       "(a login agent only starts once someone logs in at the Mac; for a server that boots\n"
+                       " to the login window or is managed over SSH use: recipes service install --system)")
             try:
                 st = sp["plist"].stat()
                 if st.st_uid != os.getuid():

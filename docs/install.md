@@ -119,6 +119,11 @@ recipes service remove
 ```
 
 `./install.sh --service` and `install.bat /service` run `recipes service install` for you.
+
+On Linux and macOS this is a per-user service: it starts when you log in. For a machine
+that is a server first (boots to the login window, or you manage it over SSH) use
+`recipes service install --system` instead: a boot-time service that runs as your user with
+no login needed. It asks for your password for the few privileged steps.
 `recipes service-template systemd|launchd|windows-task` prints the definition if you want to
 place it yourself (for example as a system-wide unit).
 
