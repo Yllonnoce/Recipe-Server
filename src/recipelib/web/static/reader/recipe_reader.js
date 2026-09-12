@@ -1,0 +1,859 @@
+/* PDF reader for recipes (templates/pages/recipe_read.html). Ported from the
+ * ScenePlay handout reader.
+ *
+ * pdf.js renders pages to canvases on demand; StPageFlip (page-flip.browser.js,
+ * MIT — the global `St`) does the book: soft pages that bend along the fold as
+ * they turn, corner-drag, two-page spread on wide screens and a single page in
+ * portrait. The book is one <div> per PDF page, all created empty up front so
+ * the library knows the page count; a page's canvas is rendered only when it
+ * comes within a few pages of the one being read, and re-rendered when the
+ * book is re-laid-out at a very different size. Progress (page + count) is
+ * posted back, debounced.
+ *
+ * Three layouts, cycled with the layout button (S): two-page spread, single
+ * page, and continuous scroll. The spread/single toggle rebuilds the whole
+ * book: page-flip can't change orientation rules after construction, so
+ * single-page mode is a fresh instance whose minWidth is wider than any
+ * screen — that pins its stretch layout to one portrait page at every window
+ * size. Scroll mode swaps the book for a stacked column of pages rendered as
+ * they come into view. The preference is per-browser (localStorage).
+ *
+ * Zoom (+/− buttons, ctrl+wheel, pinch) is a CSS transform on the wrapper in
+ * book layouts — live scaling stays cheap — and once it settles, the visible
+ * pages are re-rendered at the zoomed resolution so text is sharp, not
+ * upscaled. While zoomed, dragging (mouse or one finger) pans instead of
+ * folding the page corner: capture-phase listeners on the stage stop the
+ * events before page-flip's own mouse/touch handlers see them. In scroll
+ * layout zoom simply widens the pages and the column scrolls natively. */
+const LAYOUTS = ['spread', 'single', 'scroll'];
+const LAYOUT_ICON = { spread: '&#9647;&#9647;', single: '&#9647;', scroll: '&#8942;' };
+const LAYOUT_NAME = { spread: 'Two-page spread', single: 'Single page', scroll: 'Continuous scroll' };
+
+export class RecipeReader {
+  constructor(pdfjsLib, opts) {
+    this.pdfjs = pdfjsLib;
+    this.opts = opts;
+    this.pdf = null;
+    this.numPages = 0;
+    this.startPage = Math.max(1, parseInt(opts.startPage, 10) || 1);
+    this.page = this.startPage;
+    this.baseSize = null;              // page 1 in PDF points
+    this.pageSizes = new Map();        // pageNum -> {w,h} in points (scroll layout)
+    this.rendered = new Map();         // pageNum -> css width the canvas was rendered for
+    this.pending = new Set();
+    this.flip = null;
+    this.layout = opts.defaultLayout || 'spread';
+    if (!opts.defaultLayout) {
+      try { const v = localStorage.getItem('rl_reader_layout'); if (LAYOUTS.indexOf(v) !== -1) this.layout = v; } catch (e) { /* private mode */ }
+    }
+    this.zoom = 1;                     // 1 = fitted; pan offsets in stage px
+    this.tx = 0;
+    this.ty = 0;
+    this.maxZoom = 4;
+    this.marks = new Map();            // page -> {id, page, label}
+    (opts.bookmarks || []).forEach((b) => this.marks.set(b.page, b));
+    this.toc = null;                   // flattened outline, resolved lazily
+    this.$ = (id) => document.getElementById(id);
+    this.stage = this.$('stage');
+    this.book = this.$('book');
+    this.wrap = this.$('bookWrap');   // we size this; page-flip owns #book (sets it to 100%)
+    this.scrollBox = this.$('scroll');
+    this.scrollCol = this.$('scrollCol');
+    this.observer = null;
+    this._bind();
+    this._open();
+  }
+
+  get single() { return this.layout === 'single'; }
+  get isScroll() { return this.layout === 'scroll'; }
+
+  /* ---------- open + build ---------- */
+  async _open() {
+    try {
+      this.pdf = await this.pdfjs.getDocument({ url: this.opts.url }).promise;
+    } catch (e) {
+      this.$('loading').textContent = 'Could not open this PDF (' + (e && e.message ? e.message : e) + ')';
+      return;
+    }
+    this.numPages = this.pdf.numPages;
+    this.$('pageCount').textContent = this.numPages;
+    this.$('pageInput').max = this.numPages;
+    const first = await this.pdf.getPage(1);
+    const vp = first.getViewport({ scale: 1 });
+    this.baseSize = { w: vp.width, h: vp.height };
+    this.page = Math.min(this.startPage, this.numPages);
+    this._build();
+  }
+
+  _build() {
+    this._resetZoom();
+    this._teardown();
+    this.rendered.clear();
+    this.pending.clear();
+    this.stage.classList.toggle('scroll', this.isScroll);
+    if (this.isScroll) this._buildScroll(); else this._buildBook();
+  }
+
+  _teardown() {
+    if (this.flip) { this.flip.destroy(); this.flip = null; this.book = null; }
+    if (this.book) { this.book.remove(); this.book = null; }
+    if (this.observer) { this.observer.disconnect(); this.observer = null; }
+    this.scrollCol.innerHTML = '';
+  }
+
+  /* Build (or rebuild, on the spread/single toggle) the page divs and the
+   * page-flip instance. flip.destroy() removes #book itself, so a rebuild
+   * recreates it from scratch inside the wrapper. */
+  _buildBook() {
+    this.book = document.createElement('div');
+    this.book.id = 'book';
+    this.wrap.appendChild(this.book);
+    for (let n = 1; n <= this.numPages; n++) {
+      const d = document.createElement('div');
+      d.className = 'page';
+      d.dataset.page = n;
+      // a stiff cover front and back, bendable paper between
+      d.dataset.density = (n === 1 || n === this.numPages) ? 'hard' : 'soft';
+      if (this.marks.has(n)) d.classList.add('marked');
+      this.book.appendChild(d);
+    }
+    this._sizeWrapper();
+    this.flip = new St.PageFlip(this.book, {
+      width: this.baseSize.w, height: this.baseSize.h,
+      // page-flip drops to a single (portrait) page when the book is narrower
+      // than 2 × minWidth — two 340 px pages is the floor for readable text.
+      // Single mode pins that: a minWidth no screen reaches keeps every
+      // relayout in the one-page branch.
+      size: 'stretch', minWidth: this.single ? 20000 : 340, maxWidth: 4000, minHeight: 160, maxHeight: 6000,
+      showCover: true, usePortrait: true, autoSize: true,
+      flippingTime: 900, maxShadowOpacity: 0.55, drawShadow: true,
+      mobileScrollSupport: false, swipeDistance: 30, showPageCorners: true,
+      startPage: this.page - 1,
+    });
+    this.flip.on('flip', (e) => {
+      this.page = e.data + 1;
+      this._updateBar();
+      this._renderAround(this.page);
+      this._post({ page: this.page });
+    });
+    this.flip.on('changeOrientation', () => { this._sizeWrapper(); this._renderAround(this.page, true); });
+    this.flip.on('init', () => {
+      this.$('loading').classList.add('done');
+      this._updateBar();
+      this._renderAround(this.page, true);
+      this._post({ page_count: this.numPages, page: this.page });
+    });
+    this.flip.loadFromHTML(this.book.querySelectorAll('.page'));
+  }
+
+  /* Continuous scroll: one sized placeholder per page in a column; an
+   * IntersectionObserver renders pages as they approach the viewport and
+   * tracks which page is most on screen. */
+  _buildScroll() {
+    for (let n = 1; n <= this.numPages; n++) {
+      const d = document.createElement('div');
+      d.className = 'page';
+      d.dataset.page = n;
+      if (this.marks.has(n)) d.classList.add('marked');
+      this.scrollCol.appendChild(d);
+    }
+    this._sizeScrollPages();
+    this.observer = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        const n = parseInt(en.target.dataset.page, 10);
+        if (en.isIntersecting) this._render(n);
+      });
+      this._trackScrollPage();
+    }, { root: this.scrollBox, rootMargin: '150% 0px' });
+    this.scrollCol.querySelectorAll('.page').forEach((el) => this.observer.observe(el));
+    this.$('loading').classList.add('done');
+    this._updateBar();
+    this._post({ page_count: this.numPages, page: this.page });
+    // jump to the start page once layout has happened
+    requestAnimationFrame(() => this._scrollTo(this.page, 'auto'));
+  }
+
+  _scrollPageWidth() {
+    const avail = this.scrollBox.clientWidth - 24;
+    return Math.max(120, Math.min(avail, 900) * this.zoom);
+  }
+
+  _sizeScrollPages() {
+    const w = this._scrollPageWidth();
+    this.scrollCol.querySelectorAll('.page').forEach((el) => {
+      const n = parseInt(el.dataset.page, 10);
+      const sz = this.pageSizes.get(n) || this.baseSize;
+      el.style.width = Math.floor(w) + 'px';
+      el.style.height = Math.floor(w * sz.h / sz.w) + 'px';
+    });
+  }
+
+  _trackScrollPage() {
+    const top = this.scrollBox.scrollTop, bottom = top + this.scrollBox.clientHeight;
+    let best = null, bestArea = 0;
+    this.scrollCol.querySelectorAll('.page').forEach((el) => {
+      const a = Math.max(0, Math.min(bottom, el.offsetTop + el.offsetHeight) - Math.max(top, el.offsetTop));
+      if (a > bestArea) { bestArea = a; best = parseInt(el.dataset.page, 10); }
+    });
+    if (best && best !== this.page) {
+      this.page = best;
+      this._updateBar();
+      this._post({ page: best });
+    }
+  }
+
+  _scrollTo(n, behavior) {
+    const el = this.scrollCol.querySelector('.page[data-page="' + n + '"]');
+    if (!el) return;
+    this.scrollBox.scrollTo({ top: el.offsetTop - 12, behavior: behavior || 'smooth' });
+  }
+
+  /* The book stretches to its wrapper's width; pick that width so the spread
+   * (or the single portrait page) also fits the stage's height. */
+  _sizeWrapper() {
+    if (!this.baseSize) return;
+    const pad = 28;
+    const sw = this.stage.clientWidth - pad, sh = this.stage.clientHeight - pad;
+    const ratio = this.baseSize.w / this.baseSize.h;
+    const portrait = this.single || (this.flip ? this.flip.getOrientation() === 'portrait' : sw < sh);
+    const across = portrait ? 1 : 2;
+    const w = Math.min(sw, sh * ratio * across);
+    this.wrap.style.width = Math.max(120, Math.floor(w)) + 'px';
+  }
+
+  /* ---------- lazy page rendering ---------- */
+  _renderAround(p, force) {
+    if (this.isScroll) {
+      // the observer drives rendering; a forced pass re-renders what's on screen
+      if (force) this._visiblePages().forEach((n) => this._render(n, true));
+      return;
+    }
+    const want = [p, p + 1, p - 1, p + 2, p + 3, p - 2, p - 3];
+    want.forEach((n) => { if (n >= 1 && n <= this.numPages) this._render(n, force); });
+  }
+
+  /* The page numbers on screen right now — only these earn the zoomed-up
+   * render resolution; neighbours prefetch at the fitted size. */
+  _visiblePages() {
+    if (this.isScroll) {
+      const top = this.scrollBox.scrollTop, bottom = top + this.scrollBox.clientHeight;
+      const out = [];
+      this.scrollCol.querySelectorAll('.page').forEach((el) => {
+        if (el.offsetTop < bottom && el.offsetTop + el.offsetHeight > top) out.push(parseInt(el.dataset.page, 10));
+      });
+      return out.length ? out : [this.page];
+    }
+    if (!this.flip) return [this.page];
+    const idx = this.flip.getCurrentPageIndex();
+    if (this.flip.getOrientation() === 'portrait') return [idx + 1];
+    const out = [idx + 1];
+    if (idx > 0 && idx + 2 <= this.numPages) out.push(idx + 2);
+    return out;
+  }
+
+  _pageEl(n) {
+    const root = this.isScroll ? this.scrollCol : this.book;
+    return root ? root.querySelector('.page[data-page="' + n + '"]') : null;
+  }
+
+  async _render(n, force) {
+    const el = this._pageEl(n);
+    if (!el || this.pending.has(n)) return;
+    let cssW;
+    if (this.isScroll) {
+      cssW = el.clientWidth;
+    } else {
+      // measure the laid-out book, not the page element: offscreen pages are
+      // display:none and page-flip rewrites #book's style width during layout.
+      // offsetWidth ignores the zoom transform — the zoom factor is applied
+      // explicitly, and only to the pages actually on screen
+      const portrait = this.flip && this.flip.getOrientation() === 'portrait';
+      cssW = this.book.offsetWidth / (portrait ? 1 : 2);
+      if (this._visiblePages().indexOf(n) !== -1) cssW *= this.zoom;
+    }
+    if (!cssW) return;
+    const have = this.rendered.get(n);
+    // re-render only when the page grew a lot (a blurry upscale) or shrank to
+    // a fraction (wasted memory) — small relayouts just scale the canvas
+    if (have && !force && cssW <= have * 1.25 && cssW >= have * 0.6) return;
+    if (have && force && Math.abs(cssW - have) < 2) return;
+    this.pending.add(n);
+    try {
+      const page = await this.pdf.getPage(n);
+      const vp1 = page.getViewport({ scale: 1 });
+      if (this.isScroll && !this.pageSizes.has(n)) {
+        this.pageSizes.set(n, { w: vp1.width, h: vp1.height });
+        if (Math.abs(vp1.width / vp1.height - this.baseSize.w / this.baseSize.h) > 0.01) {
+          el.style.height = Math.floor(el.clientWidth * vp1.height / vp1.width) + 'px';
+        }
+      }
+      let dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+      const scale = cssW / vp1.width;
+      const vp = page.getViewport({ scale });
+      // deep zoom on a big monitor could ask for an absurd canvas — cap the
+      // backing store around 4k on either axis and let CSS stretch the rest
+      dpr = Math.min(dpr, 4096 / vp.width, 4600 / vp.height);
+      if (dpr <= 0) return;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(vp.width * dpr);
+      canvas.height = Math.round(vp.height * dpr);
+      const ctx = canvas.getContext('2d', { alpha: false });
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      el.innerHTML = '';
+      el.appendChild(canvas);
+      this.rendered.set(n, cssW);
+    } catch (e) {
+      console.warn('page render failed', n, e);
+    } finally {
+      this.pending.delete(n);
+    }
+  }
+
+  /* ---------- navigation ---------- */
+  next() {
+    if (this.isScroll) return this.goto(this.page + 1);
+    if (this.flip) this.flip.flipNext();
+  }
+  prev() {
+    if (this.isScroll) return this.goto(this.page - 1);
+    if (this.flip) this.flip.flipPrev();
+  }
+
+  cycleLayout() {
+    if (!this.pdf) return;
+    this.setLayout(LAYOUTS[(LAYOUTS.indexOf(this.layout) + 1) % LAYOUTS.length]);
+  }
+
+  setLayout(layout) {
+    if (LAYOUTS.indexOf(layout) === -1 || layout === this.layout) return;
+    this.layout = layout;
+    try { localStorage.setItem('rl_reader_layout', layout); } catch (e) { /* private mode */ }
+    this._updateLayoutBtn();
+    this._build();
+    this._toast(LAYOUT_NAME[layout]);
+  }
+
+  _updateLayoutBtn() {
+    const b = this.$('btnLayout');
+    // the button shows what it switches to next
+    const nxt = LAYOUTS[(LAYOUTS.indexOf(this.layout) + 1) % LAYOUTS.length];
+    b.innerHTML = LAYOUT_ICON[nxt];
+    b.title = LAYOUT_NAME[nxt] + ' (S)';
+  }
+
+  /* ---------- zoom + pan ---------- */
+  /* Change zoom keeping the point under (cx, cy) — client coords — still.
+   * With transform-origin at the wrapper's centre (which flex keeps on the
+   * stage's centre), a content point u maps to centre + u·zoom + (tx, ty). */
+  _setZoom(z, cx, cy) {
+    z = Math.max(1, Math.min(this.maxZoom, z));
+    if (this.isScroll) {
+      // keep the same document position under the viewport's centre
+      const frac = (this.scrollBox.scrollTop + this.scrollBox.clientHeight / 2) / Math.max(1, this.scrollCol.scrollHeight);
+      this.zoom = z;
+      this._sizeScrollPages();
+      this.scrollBox.scrollTop = frac * this.scrollCol.scrollHeight - this.scrollBox.clientHeight / 2;
+      this._updateZoomUI();
+      clearTimeout(this._zoomT);
+      this._zoomT = setTimeout(() => this._renderAround(this.page, true), 350);
+      return;
+    }
+    const r = this.stage.getBoundingClientRect();
+    if (cx === undefined) { cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
+    const sx = cx - (r.left + r.width / 2), sy = cy - (r.top + r.height / 2);
+    const ux = (sx - this.tx) / this.zoom, uy = (sy - this.ty) / this.zoom;
+    this.zoom = z;
+    this.tx = sx - ux * z;
+    this.ty = sy - uy * z;
+    this._applyZoom();
+  }
+
+  _resetZoom() {
+    this.zoom = 1;
+    this.tx = this.ty = 0;
+    clearTimeout(this._zoomT);
+    if (this.wrap) this.wrap.style.transform = '';
+    this.stage.classList.remove('zoomed');
+    this._updateZoomUI();
+  }
+
+  _applyZoom() {
+    if (this.zoom <= 1) {
+      this._resetZoom();
+      // fall through to the settle re-render so a zoomed canvas shrinks back
+    } else {
+      const mx = Math.max(0, (this.wrap.offsetWidth * this.zoom - this.stage.clientWidth) / 2);
+      const my = Math.max(0, (this.wrap.offsetHeight * this.zoom - this.stage.clientHeight) / 2);
+      this.tx = Math.max(-mx, Math.min(mx, this.tx));
+      this.ty = Math.max(-my, Math.min(my, this.ty));
+      this.wrap.style.transform = 'translate(' + this.tx + 'px, ' + this.ty + 'px) scale(' + this.zoom + ')';
+      this.stage.classList.add('zoomed');
+      this._updateZoomUI();
+    }
+    // once the gesture settles, redraw the visible pages at this resolution
+    clearTimeout(this._zoomT);
+    this._zoomT = setTimeout(() => this._renderAround(this.page, true), 350);
+  }
+
+  _updateZoomUI() {
+    const pct = this.$('btnZoomReset');
+    if (!pct) return;
+    pct.textContent = Math.round(this.zoom * 100) + '%';
+    this.$('btnZoomOut').disabled = this.zoom <= 1;
+    this.$('btnZoomIn').disabled = this.zoom >= this.maxZoom;
+  }
+
+  goto(n) {
+    if (!this.pdf) return;
+    n = Math.max(1, Math.min(this.numPages, parseInt(n, 10) || 1));
+    if (this.isScroll) {
+      this.page = n;
+      this._scrollTo(n);
+      this._updateBar();
+      this._post({ page: n });
+      return;
+    }
+    if (!this.flip) return;
+    const cur = this.flip.getCurrentPageIndex() + 1;
+    if (n === cur) return;
+    // a neighbouring spread animates; anything further jumps
+    if (Math.abs(n - cur) <= 2) this.flip.flip(n - 1);
+    else this.flip.turnToPage(n - 1);
+    this.page = n;
+    this._updateBar();
+    this._renderAround(n);
+    this._post({ page: n });
+  }
+
+  _updateBar() {
+    let idx, portrait;
+    if (this.isScroll) {
+      idx = this.page - 1;
+      portrait = true;
+    } else {
+      if (!this.flip) return;
+      idx = this.flip.getCurrentPageIndex();
+      portrait = this.flip.getOrientation() === 'portrait';
+    }
+    this.$('pageInput').value = idx + 1;
+    this.$('btnPrev').disabled = this.$('btnFirst').disabled = idx <= 0;
+    const lastShown = portrait ? idx : Math.min(this.numPages - 1, idx + 1);
+    this.$('btnNext').disabled = this.$('btnLast').disabled = lastShown >= this.numPages - 1;
+    const label = (!portrait && idx > 0 && idx + 1 < this.numPages) ? (idx + 1) + '–' + (idx + 2) : String(idx + 1);
+    document.title = label + ' / ' + this.numPages + ' — ' + document.title.replace(/^.*? — /, '');
+    this._updateMarkUI();
+  }
+
+  /* ---------- bookmarks ---------- */
+  /* The page the bookmark button acts on: the one in the page box (the left
+   * page of a spread). The panel's Add form takes any page number. */
+  _curPage() {
+    if (this.isScroll || !this.flip) return this.page;
+    return this.flip.getCurrentPageIndex() + 1;
+  }
+
+  _updateMarkUI() {
+    const b = this.$('btnBookmark');
+    if (!b) return;
+    const cur = this._curPage();
+    const on = this.marks.has(cur);
+    b.classList.toggle('on', on);
+    b.title = (on ? 'Remove bookmark on page ' : 'Bookmark page ') + cur + ' (B)';
+    const mp = this.$('markPage');
+    if (mp && document.activeElement !== mp) mp.value = cur;
+    this._renderMarkList();
+  }
+
+  toggleBookmark(page) {
+    page = page || this._curPage();
+    const have = this.marks.get(page);
+    if (have) return this.removeBookmark(have);
+    return this.addBookmark(page, '');
+  }
+
+  async addBookmark(page, label) {
+    page = Math.max(1, Math.min(this.numPages || page, parseInt(page, 10) || this._curPage()));
+    const j = await this._api(this.opts.bookmarksUrl, { page, label: label || null });
+    if (!j) return;
+    this._setMarks(j.bookmarks);
+    this._toast((j.created ? 'Bookmarked page ' : 'Renamed bookmark on page ') + page);
+  }
+
+  async removeBookmark(bm) {
+    const j = await this._api(this.opts.bookmarksUrl + '/' + bm.id + '/delete', {});
+    if (!j) return;
+    this._setMarks(j.bookmarks);
+    this._toast('Bookmark removed');
+  }
+
+  async renameBookmark(bm, label) {
+    label = (label || '').trim();
+    if (!label || label === bm.label) return;
+    const j = await this._api(this.opts.bookmarksUrl + '/' + bm.id + '/rename', { label });
+    if (j) this._setMarks(j.bookmarks);
+  }
+
+  async _api(url, body) {
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                   body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!j.ok) { this._toast(j.error || 'Bookmark failed'); return null; }
+      return j;
+    } catch (e) {
+      this._toast('Bookmark failed — is the server reachable?');
+      return null;
+    }
+  }
+
+  _setMarks(list) {
+    this.marks.clear();
+    (list || []).forEach((b) => this.marks.set(b.page, b));
+    const root = this.isScroll ? this.scrollCol : this.book;
+    if (root) {
+      root.querySelectorAll('.page').forEach((el) => {
+        el.classList.toggle('marked', this.marks.has(parseInt(el.dataset.page, 10)));
+      });
+    }
+    this._updateMarkUI();
+  }
+
+  _renderMarkList() {
+    const box = this.$('markList');
+    if (!box || box.querySelector('input')) return;   // a rename is in progress
+    box.innerHTML = '';
+    const list = Array.from(this.marks.values()).sort((a, b) => a.page - b.page);
+    if (!list.length) {
+      const e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = 'No bookmarks yet — press B on a page, or add one above.';
+      box.appendChild(e);
+      return;
+    }
+    const shown = this._visiblePages();
+    list.forEach((bm) => {
+      const row = document.createElement('div');
+      row.className = 'row' + (shown.indexOf(bm.page) !== -1 ? ' cur' : '');
+      const lbl = document.createElement('span');
+      lbl.className = 'lbl';
+      lbl.textContent = bm.label;
+      lbl.title = 'Go to page ' + bm.page + ' (double-click to rename)';
+      const pg = document.createElement('span');
+      pg.className = 'pg';
+      pg.textContent = 'p. ' + bm.page;
+      const ren = document.createElement('button');
+      ren.className = 'ico';
+      ren.type = 'button';
+      ren.innerHTML = '&#9998;';
+      ren.title = 'Rename bookmark';
+      const del = document.createElement('button');
+      del.className = 'ico';
+      del.type = 'button';
+      del.innerHTML = '&#10005;';
+      del.title = 'Remove bookmark';
+      row.appendChild(lbl); row.appendChild(pg); row.appendChild(ren); row.appendChild(del);
+      // a click anywhere on the row jumps; renaming is the pencil (or a
+      // double-click on the label) so a jump never turns into an edit
+      row.addEventListener('click', () => { if (!lbl.querySelector('input')) this.goto(bm.page); });
+      ren.addEventListener('click', (e) => { e.stopPropagation(); this._editLabel(lbl, bm); });
+      lbl.addEventListener('dblclick', (e) => { e.stopPropagation(); this._editLabel(lbl, bm); });
+      del.addEventListener('click', (e) => { e.stopPropagation(); this.removeBookmark(bm); });
+      box.appendChild(row);
+    });
+  }
+
+  /* Swap the label for an input; Enter/blur saves, Esc reverts. */
+  _editLabel(lbl, bm) {
+    if (lbl.querySelector('input')) return;
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.maxLength = 80;
+    inp.value = bm.label;
+    lbl.textContent = '';
+    lbl.appendChild(inp);
+    inp.focus();
+    inp.select();
+    let done = false;
+    const finish = (save) => {
+      if (done) return;
+      done = true;
+      const v = inp.value;
+      lbl.textContent = bm.label;
+      if (save) this.renameBookmark(bm, v);
+    };
+    inp.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    inp.addEventListener('blur', () => finish(true));
+    inp.addEventListener('click', (e) => e.stopPropagation());
+  }
+
+  togglePanel(open) {
+    const p = this.$('marks');
+    if (!p) return;
+    if (open === undefined) open = !p.classList.contains('open');
+    p.classList.toggle('open', open);
+    this.$('btnMarks').classList.toggle('on', open);
+    if (open) { this._renderMarkList(); this._loadToc(); }
+  }
+
+  /* The PDF's own outline (what Acrobat calls "Bookmarks"), flattened with a
+   * depth per row. Destinations are resolved to page numbers one by one;
+   * anything that fails to resolve is simply left out. */
+  async _loadToc() {
+    if (this.toc !== null || !this.pdf) return;
+    this.toc = [];
+    const box = this.$('tocList');
+    const flat = [];
+    const walk = (items, depth) => {
+      (items || []).forEach((it) => {
+        if (flat.length < 600) flat.push({ title: (it.title || '').trim(), dest: it.dest, depth });
+        walk(it.items, depth + 1);
+      });
+    };
+    try {
+      walk(await this.pdf.getOutline(), 0);
+      for (const it of flat) {
+        if (!it.title) continue;
+        try {
+          let dest = it.dest;
+          if (typeof dest === 'string') dest = await this.pdf.getDestination(dest);
+          if (!Array.isArray(dest) || !dest.length) continue;
+          const ref = dest[0];
+          const page = (typeof ref === 'number') ? ref + 1 : (await this.pdf.getPageIndex(ref)) + 1;
+          if (page >= 1 && page <= this.numPages) this.toc.push({ title: it.title, page, depth: it.depth });
+        } catch (e) { /* unresolvable entry */ }
+      }
+    } catch (e) {
+      console.warn('outline failed', e);
+    }
+    box.innerHTML = '';
+    if (!this.toc.length) {
+      const e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = 'This PDF has no table of contents.';
+      box.appendChild(e);
+      return;
+    }
+    this.toc.forEach((t) => {
+      const row = document.createElement('div');
+      row.className = 'row toc';
+      row.style.setProperty('--d', Math.min(t.depth, 5));
+      const lbl = document.createElement('span');
+      lbl.className = 'lbl';
+      lbl.textContent = t.title;
+      const pg = document.createElement('span');
+      pg.className = 'pg';
+      pg.textContent = 'p. ' + t.page;
+      row.appendChild(lbl); row.appendChild(pg);
+      row.addEventListener('click', () => this.goto(t.page));
+      box.appendChild(row);
+    });
+  }
+
+  _toast(msg) {
+    const t = this.$('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => t.classList.remove('show'), 1200);
+  }
+
+  _post(data) {
+    this._postBuf = Object.assign(this._postBuf || {}, data);
+    clearTimeout(this._postT);
+    this._postT = setTimeout(() => {
+      const body = JSON.stringify(this._postBuf);
+      this._postBuf = null;
+      fetch(this.opts.progressUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true,
+      }).catch(() => {});
+    }, 600);
+  }
+
+  _bind() {
+    this.$('btnNext').onclick = () => this.next();
+    this.$('btnPrev').onclick = () => this.prev();
+    this.$('btnFirst').onclick = () => this.goto(1);
+    this.$('btnLast').onclick = () => this.goto(this.numPages);
+    this.$('btnFull').onclick = () => this._fullscreen();
+    this.$('btnLayout').onclick = () => this.cycleLayout();
+    this._updateLayoutBtn();
+    this.$('btnZoomIn').onclick = () => this._setZoom(this.zoom * 1.25);
+    this.$('btnZoomOut').onclick = () => this._setZoom(this.zoom / 1.25);
+    this.$('btnZoomReset').onclick = () => this._setZoom(1);
+    this._updateZoomUI();
+    const input = this.$('pageInput');
+    input.addEventListener('change', () => this.goto(input.value));
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); e.stopPropagation(); });
+
+    this.$('btnBookmark').onclick = () => this.toggleBookmark();
+    this.$('btnMarks').onclick = () => this.togglePanel();
+    this.$('marksClose').onclick = () => this.togglePanel(false);
+    const addForm = this.$('markAdd');
+    addForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const lbl = this.$('markLabel');
+      this.addBookmark(this.$('markPage').value, lbl.value);
+      lbl.value = '';
+    });
+    // typing in the panel must not turn pages
+    addForm.addEventListener('keydown', (e) => e.stopPropagation());
+    this._updateMarkUI();
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target === input) return;
+      const tag = e.target && e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (e.key === 'Escape' && this.$('marks').classList.contains('open')) { this.togglePanel(false); return; }
+      // in scroll layout the arrows and space scroll natively
+      const scrollKeys = this.isScroll && [' ', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp'].indexOf(e.key) !== -1;
+      switch (e.key) {
+        case 'ArrowRight': e.preventDefault(); this.next(); break;
+        case 'ArrowLeft': e.preventDefault(); this.prev(); break;
+        case 'PageDown': case ' ': case 'ArrowDown': if (!scrollKeys) { e.preventDefault(); this.next(); } break;
+        case 'PageUp': case 'ArrowUp': case 'Backspace': if (!scrollKeys) { e.preventDefault(); this.prev(); } break;
+        case 'Home': e.preventDefault(); this.goto(1); break;
+        case 'End': e.preventDefault(); this.goto(this.numPages); break;
+        case 'f': case 'F': this._fullscreen(); break;
+        case 's': case 'S': this.cycleLayout(); break;
+        case 'b': case 'B': this.toggleBookmark(); break;
+        case 'm': case 'M': this.togglePanel(); break;
+        case 'g': case 'G': input.focus(); input.select(); break;
+        case '+': case '=': this._setZoom(this.zoom * 1.25); break;
+        case '-': case '_': this._setZoom(this.zoom / 1.25); break;
+        case '0': this._setZoom(1); break;
+      }
+    });
+    // wheel: ctrl+wheel (incl. trackpad pinch) zooms at the cursor; a plain
+    // wheel pans while zoomed, otherwise one notch = one page turn (the
+    // library ignores a flip already in progress). Scroll layout scrolls.
+    this.stage.addEventListener('wheel', (e) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        this._setZoom(this.zoom * Math.exp(-e.deltaY * 0.0022), e.clientX, e.clientY);
+        return;
+      }
+      if (this.isScroll) return;
+      if (this.zoom > 1) {
+        e.preventDefault();
+        this.tx -= e.deltaX;
+        this.ty -= e.deltaY;
+        this._applyZoom();
+        return;
+      }
+      if (Math.abs(e.deltaY) < 10 && Math.abs(e.deltaX) < 10) return;
+      e.preventDefault();
+      if ((e.deltaY || e.deltaX) > 0) this.next(); else this.prev();
+    }, { passive: false });
+    this.scrollBox.addEventListener('scroll', () => {
+      clearTimeout(this._scrollT);
+      this._scrollT = setTimeout(() => this._trackScrollPage(), 80);
+    });
+
+    // While zoomed a drag pans; capture phase so page-flip's own handlers
+    // (fold drag, swipe) never see the gesture. A two-finger pinch always
+    // wins, even from the fitted view.
+    this.stage.addEventListener('mousedown', (e) => {
+      if (this.isScroll || this.zoom <= 1 || e.button !== 0) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const s = { x: e.clientX, y: e.clientY, tx0: this.tx, ty0: this.ty };
+      this.stage.classList.add('panning');
+      const mv = (ev) => {
+        this.tx = s.tx0 + ev.clientX - s.x;
+        this.ty = s.ty0 + ev.clientY - s.y;
+        this._applyZoom();
+      };
+      const up = () => {
+        this.stage.classList.remove('panning');
+        document.removeEventListener('mousemove', mv);
+        document.removeEventListener('mouseup', up);
+      };
+      document.addEventListener('mousemove', mv);
+      document.addEventListener('mouseup', up);
+    }, true);
+
+    const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    let touch = null;   // {pinch, d0, z0} or {pan fields}
+    const startPan = (t) => { touch = { x: t.clientX, y: t.clientY, tx0: this.tx, ty0: this.ty }; };
+    this.stage.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        touch = { pinch: true, d0: dist(e.touches[0], e.touches[1]), z0: this.zoom };
+      } else if (!this.isScroll && this.zoom > 1 && e.touches.length === 1) {
+        startPan(e.touches[0]);
+      } else {
+        touch = null;
+        return;                          // fitted single touch: page-flip's swipe, or native scroll
+      }
+      e.stopPropagation();
+      e.preventDefault();
+    }, { capture: true, passive: false });
+    this.stage.addEventListener('touchmove', (e) => {
+      if (!touch) return;
+      e.stopPropagation();
+      e.preventDefault();
+      if (touch.pinch && e.touches.length >= 2) {
+        const a = e.touches[0], b = e.touches[1];
+        this._setZoom(touch.z0 * dist(a, b) / touch.d0,
+                      (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2);
+      } else if (!touch.pinch) {
+        this.tx = touch.tx0 + e.touches[0].clientX - touch.x;
+        this.ty = touch.ty0 + e.touches[0].clientY - touch.y;
+        this._applyZoom();
+      }
+    }, { capture: true, passive: false });
+    const touchDone = (e) => {
+      if (!touch) return;
+      e.stopPropagation();
+      if (e.touches.length === 1 && !this.isScroll && this.zoom > 1) startPan(e.touches[0]);
+      else if (e.touches.length === 0) touch = null;
+    };
+    this.stage.addEventListener('touchend', touchDone, true);
+    this.stage.addEventListener('touchcancel', touchDone, true);
+
+    let rt = null;
+    const relayout = () => {
+      clearTimeout(rt);
+      rt = setTimeout(() => {
+        if (this.isScroll) {
+          this._sizeScrollPages();
+          this._renderAround(this.page, true);
+          return;
+        }
+        if (!this.flip) return;
+        this._sizeWrapper();
+        this.flip.update();
+        if (this.zoom > 1) this._applyZoom();   // re-clamp the pan to the new size
+        this._renderAround(this.page);
+      }, 150);
+    };
+    window.addEventListener('resize', relayout);
+
+    // fullscreen: hide the bar after a moment of stillness, bring it back on movement
+    const bar = this.$('bar');
+    let hideT = null;
+    const arm = () => {
+      bar.classList.remove('hidden');
+      clearTimeout(hideT);
+      if (document.fullscreenElement) hideT = setTimeout(() => bar.classList.add('hidden'), 2000);
+    };
+    document.addEventListener('mousemove', arm);
+    document.addEventListener('fullscreenchange', () => {
+      document.body.classList.toggle('chromeless', !!document.fullscreenElement);
+      arm();
+      relayout();
+    });
+  }
+
+  _fullscreen() {
+    if (document.fullscreenElement) { document.exitFullscreen && document.exitFullscreen(); return; }
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => this._toast('Fullscreen not available'));
+  }
+}

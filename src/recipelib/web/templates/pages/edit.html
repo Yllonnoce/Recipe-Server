@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ r.title }} — Recipe Library{% endblock %}
+{% block content %}
+<div class="edit-layout">
+  <div class="edit-pdf">
+    {% if r.pdf_asset_id %}
+    <iframe src="{{ request.url_for('recipe_read', recipe_id=r.id) }}?embed=1" title="PDF"></iframe>
+    {% endif %}
+  </div>
+  <form class="edit-form" method="post" action="{{ request.url_for('recipe_edit_save', recipe_id=r.id) }}">
+    <h1>Edit recipe</h1>
+    <label>Title <input name="title" value="{{ r.title }}" required maxlength="200"></label>
+    <label>Description <textarea name="description" rows="2">{{ r.description or '' }}</textarea></label>
+    <div class="row">
+      <label>Servings <input name="servings" value="{{ r.servings if r.servings is not none else '' }}" inputmode="decimal"></label>
+      <label>Yield <input name="yield_text" value="{{ r.yield_text or '' }}" placeholder="e.g. 12 muffins"></label>
+    </div>
+    <div class="row">
+      <label>Prep (min) <input name="prep_min" value="{{ r.prep_min or '' }}" inputmode="numeric"></label>
+      <label>Cook (min) <input name="cook_min" value="{{ r.cook_min or '' }}" inputmode="numeric"></label>
+      <label>Total (min) <input name="total_min" value="{{ r.total_min or '' }}" inputmode="numeric"></label>
+    </div>
+    <label>Ingredients <small>one per line; a line ending in “:” starts a group</small>
+      <textarea name="ingredients" rows="12" placeholder="2 cups flour&#10;1 tsp salt&#10;For the sauce:&#10;1 can tomatoes">{{ ingredients_text }}</textarea></label>
+    <label>Directions <small>one step per line</small>
+      <textarea name="steps" rows="12">{{ steps_text }}</textarea></label>
+    <div class="row">
+      <label>Course <input name="course" value="{{ course }}" list="courses" placeholder="dinner, dessert"></label>
+      <label>Cuisine <input name="cuisine" value="{{ cuisine }}" list="cuisines" placeholder="italian"></label>
+    </div>
+    <label>Tags <input name="tags" value="{{ custom }}" placeholder="comma separated"></label>
+    <div class="row">
+      <label>Source URL <input name="source_url" value="{{ r.source_url or '' }}"></label>
+      <label>Source name <input name="source_name" value="{{ r.source_name or '' }}"></label>
+    </div>
+    <label>Notes <textarea name="notes" rows="3">{{ r.notes or '' }}</textarea></label>
+    <datalist id="courses">{% for n, c in all_tags.get('course', []) %}<option value="{{ n }}">{% endfor %}</datalist>
+    <datalist id="cuisines">{% for n, c in all_tags.get('cuisine', []) %}<option value="{{ n }}">{% endfor %}</datalist>
+    <div class="actions">
+      <button class="btn primary" type="submit">Save</button>
+      <a class="btn" href="{{ request.url_for('recipe_detail', recipe_id=r.id) }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

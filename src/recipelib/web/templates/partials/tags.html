@@ -1,0 +1,13 @@
+<div id="tags" class="tags">
+  {% for t in r.tags %}
+    <span class="chip kind-{{ t.kind }}">
+      <a href="{{ request.url_for('library') }}?tag={{ t.kind }}:{{ t.name|urlencode }}">{{ t.name }}</a>
+      <button class="x" hx-post="{{ request.url_for('recipe_tag_remove', recipe_id=r.id, tag_id=t.id) }}" hx-target="#tags" hx-swap="outerHTML" title="Remove tag">×</button>
+    </span>
+  {% endfor %}
+  <form class="tag-add" hx-post="{{ request.url_for('recipe_tag_add', recipe_id=r.id) }}" hx-target="#tags" hx-swap="outerHTML">
+    <input name="name" placeholder="add tag" maxlength="60" autocomplete="off">
+    <select name="kind"><option value="custom">tag</option><option value="course">course</option><option value="cuisine">cuisine</option></select>
+    <button class="btn small" type="submit">Add</button>
+  </form>
+</div>

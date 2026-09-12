@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Recipe Library{% endblock %}</title>
+<link rel="stylesheet" href="{{ request.url_for('static', path='app.css') }}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍲</text></svg>">
+<script src="{{ request.url_for('static', path='vendor/htmx.min.js') }}"></script>
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="{{ request.url_for('library') }}">🍲 Recipe Library</a>
+  <nav>
+    <a href="{{ request.url_for('library') }}">Library</a>
+    <a href="{{ request.url_for('capture') }}">Add</a>
+    <a href="{{ request.url_for('settings') }}">Settings</a>
+  </nav>
+</header>
+<main class="wrap">
+{% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

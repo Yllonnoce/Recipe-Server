@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Add recipes — Recipe Library{% endblock %}
+{% block content %}
+<h1>Add recipes</h1>
+{% if message %}<div class="banner info">{{ message }}</div>{% endif %}
+<div class="capture-grid">
+  <section class="panel">
+    <h2>From a web page</h2>
+    <form method="post" action="{{ request.url_for('capture_url') }}" class="stack">
+      <input name="url" type="url" placeholder="https://…" required>
+      <label class="check"><input type="checkbox" name="force" value="1"> Re-capture even if already in the library</label>
+      <button class="btn primary" type="submit">Fetch recipe</button>
+    </form>
+    <p class="muted">The page is saved as a PDF and the recipe is pulled from the page’s structured data when it has any.</p>
+  </section>
+  <section class="panel">
+    <h2>Upload PDFs or photos</h2>
+    <form id="upl" method="post" action="{{ request.url_for('capture_upload') }}" enctype="multipart/form-data" class="stack" hx-post="{{ request.url_for('capture_upload') }}" hx-target="#upl-result" hx-encoding="multipart/form-data">
+      <label class="drop" id="drop">
+        <input type="file" name="files" multiple accept="application/pdf,image/*">
+        <span>Drop PDFs or photos here, or tap to choose</span>
+      </label>
+      <label class="check"><input type="checkbox" name="combine" value="1"> Combine photos into one recipe</label>
+      <button class="btn primary" type="submit">Upload</button>
+      <div id="upl-result"></div>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Print to the library</h2>
+    {% if printer %}
+      <p>Look for the printer <strong>{{ cfg.printer_name }}</strong> on any device on this Wi-Fi and print the recipe page to it.</p>
+      <p class="muted">Not showing up? Add it by address: <code>ipp://{{ host }}:{{ cfg.ipp_port }}/ipp/print</code></p>
+    {% else %}
+      <p class="muted">The virtual printer is off. Enable it in the config file (<code>printer_enabled = true</code>).</p>
+    {% endif %}
+    <h2>Inbox folder</h2>
+    <p class="muted">Anything dropped into <code>{{ cfg.inbox_dir }}</code> is picked up within a few seconds.</p>
+  </section>
+</div>
+<h2>Recent captures</h2>
+<div id="jobs" hx-get="{{ request.url_for('jobs_partial') }}" hx-trigger="every 2s" hx-swap="innerHTML">
+  {% include "partials/jobs.html" %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const drop = document.getElementById('drop');
+['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => { drop.querySelector('input').files = e.dataTransfer.files; });
+</script>
+{% endblock %}

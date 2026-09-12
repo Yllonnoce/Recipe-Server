@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>{{ r.title }} — Recipe Library</title>
+<style>
+  /* Standalone full-viewport reader (no site chrome — the book IS the page). */
+  html, body { height:100%; margin:0; overflow:hidden; background:#1c1a17; color:#e8e2d6;
+               font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #bar { position:fixed; top:0; left:0; right:0; height:44px; display:flex; align-items:center; gap:8px;
+         padding:0 12px; background:rgba(20,18,15,.92); border-bottom:1px solid #3a352d; z-index:20;
+         font-size:.9em; transition:opacity .3s; }
+  #bar.hidden { opacity:0; pointer-events:none; }
+  #bar a { color:#e8e2d6; text-decoration:none; opacity:.85; white-space:nowrap; }
+  #bar a:hover { opacity:1; text-decoration:underline; }
+  #bar .title { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
+  #bar button, #bar input { background:#2b2822; color:#e8e2d6; border:1px solid #4a443a; border-radius:6px;
+                            padding:4px 9px; font:inherit; }
+  #bar button:hover { background:#3a352d; cursor:pointer; }
+  #bar button:disabled { opacity:.35; cursor:default; }
+  #bar input[type=number] { width:64px; text-align:center; -moz-appearance:textfield; }
+  #bar input::-webkit-outer-spin-button, #bar input::-webkit-inner-spin-button { -webkit-appearance:none; }
+  #bar .pages { white-space:nowrap; opacity:.8; }
+  #bar #btnZoomReset { min-width:54px; }
+  #stage { position:absolute; inset:44px 0 0 0; display:flex; align-items:center; justify-content:center;
+           user-select:none; -webkit-user-select:none; touch-action:none; overflow:hidden; }
+  body.chromeless #stage { inset:0; }
+  #stage.zoomed { cursor:grab; }
+  #stage.zoomed.panning { cursor:grabbing; }
+  #bookWrap { position:relative; transform-origin:50% 50%; }
+  /* page-flip mirrors its minWidth setting into an inline min-width here; in
+     single-page mode that setting is a huge sentinel (see recipe_reader.js),
+     so the inline style must never win — the wrapper alone sizes the book. */
+  #book { position:relative; width:100%; min-width:0 !important; }
+  #book .page { background:#fff; overflow:hidden; box-shadow: 0 0 0 1px rgba(0,0,0,.25); }
+  #book .page canvas { display:block; width:100%; height:100%; }
+  #book .page[data-density="hard"] { background:#f3efe8; }
+  .stf__wrapper { margin:0 auto; }
+  .stf__block { box-shadow:0 30px 60px rgba(0,0,0,.6); }
+  /* continuous-scroll layout: pages stacked in a scrolling column */
+  #scroll { position:absolute; inset:0; overflow:auto; display:none; touch-action:pan-x pan-y; -webkit-overflow-scrolling:touch; }
+  #stage.scroll #scroll { display:block; }
+  #stage.scroll #bookWrap { display:none; }
+  #scroll .col { display:flex; flex-direction:column; align-items:center; gap:18px; padding:18px 12px 60px; }
+  #scroll .page { position:relative; background:#fff; box-shadow:0 8px 24px rgba(0,0,0,.5); overflow:hidden; }
+  #scroll .page canvas { display:block; width:100%; height:100%; }
+  #loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:1.1em;
+             opacity:.8; z-index:30; pointer-events:none; }
+  #loading.done { display:none; }
+  #toast { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); background:rgba(20,18,15,.9);
+           padding:6px 14px; border-radius:8px; font-size:.85em; opacity:0; transition:opacity .3s; pointer-events:none; z-index:40; }
+  #toast.show { opacity:1; }
+  /* bookmark ribbon: a CSS pseudo-element so a page re-render (innerHTML
+     swap) can't wipe it, and page-flip's cloneNode copies keep it too */
+  .page.marked::after { content:""; position:absolute; top:0; right:6%; width:4.5%; min-width:14px; max-width:34px;
+    aspect-ratio:1/2.4; background:#c8542a; z-index:5; pointer-events:none;
+    clip-path:polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%); box-shadow:0 2px 4px rgba(0,0,0,.35); }
+  #bar #btnBookmark.on { background:#6b2a22; border-color:#c8542a; }
+  #bar #btnMarks.on { background:#3a352d; }
+  #marks { position:fixed; top:44px; right:0; bottom:0; width:min(340px, 92vw); background:rgba(28,26,23,.97);
+           border-left:1px solid #3a352d; z-index:25; display:flex; flex-direction:column;
+           transform:translateX(100%); transition:transform .25s; box-shadow:-10px 0 30px rgba(0,0,0,.4); }
+  #marks.open { transform:none; }
+  body.chromeless #marks { top:0; }
+  #marks .hd { display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid #3a352d; }
+  #marks .hd h3 { margin:0; font-size:.95em; flex:1; }
+  #marks .hd button, #marks .add button { background:#2b2822; color:#e8e2d6; border:1px solid #4a443a; border-radius:6px;
+                       padding:3px 8px; font:inherit; cursor:pointer; }
+  #marks .hd button:hover, #marks .add button:hover { background:#3a352d; }
+  #marks .add { display:flex; gap:6px; padding:8px 10px; border-bottom:1px solid #3a352d; align-items:center; }
+  #marks .add input { background:#1c1a17; color:#e8e2d6; border:1px solid #4a443a; border-radius:6px; padding:4px 8px; font:inherit; min-width:0; }
+  #marks .add input[type=number] { width:60px; text-align:center; -moz-appearance:textfield; }
+  #marks .add input[type=text] { flex:1; }
+  #marks .add input::-webkit-outer-spin-button, #marks .add input::-webkit-inner-spin-button { -webkit-appearance:none; }
+  #marks .body { flex:1; overflow:auto; padding:6px 0 20px; font-size:.9em; }
+  #marks h4 { margin:10px 12px 4px; font-size:.75em; text-transform:uppercase; letter-spacing:.06em; opacity:.6; }
+  #marks .empty { padding:4px 12px 8px; opacity:.55; font-size:.85em; }
+  #marks .row { display:flex; align-items:center; gap:6px; padding:4px 8px 4px 12px; cursor:pointer; }
+  #marks .row:hover { background:rgba(255,255,255,.06); }
+  #marks .row.cur { background:rgba(200,84,42,.25); }
+  #marks .row .lbl { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #marks .row .lbl input { width:100%; background:#1c1a17; color:#e8e2d6; border:1px solid #c8542a; border-radius:4px; padding:2px 6px; font:inherit; }
+  #marks .row .pg { opacity:.6; font-variant-numeric:tabular-nums; min-width:2.5em; text-align:right; }
+  #marks .row .ico { opacity:.5; background:none; border:0; color:inherit; cursor:pointer; padding:0 4px; font:inherit; }
+  #marks .row .ico:hover { opacity:1; }
+  #marks .row.toc { padding-left:calc(12px + var(--d, 0) * 14px); }
+  #marks .row.toc .lbl { white-space:normal; }
+  @media (max-width: 720px) { #bar .pages, #bar .lbl, #bar #btnZoomReset, #bar #btnFirst, #bar #btnLast { display:none; } #bar { gap:5px; padding:0 6px; } #bar button { padding:4px 7px; } }
+  {% if embed %}#bar .back { display:none; }{% endif %}
+</style>
+</head>
+<body>
+<div id="bar">
+  <a class="back" href="{{ request.url_for('recipe_detail', recipe_id=r.id) }}" title="Back to the recipe">&larr; Recipe</a>
+  <span class="title">{{ r.title }}</span>
+  <button id="btnFirst" title="First page (Home)">&#9198;</button>
+  <button id="btnPrev" title="Previous (←)">&#9664;</button>
+  <label class="lbl">Page <input type="number" id="pageInput" min="1" value="{{ start_page }}"></label>
+  <span class="pages">of <span id="pageCount">?</span></span>
+  <button id="btnNext" title="Next (→)">&#9654;</button>
+  <button id="btnLast" title="Last page (End)">&#9197;</button>
+  <button id="btnZoomOut" title="Zoom out (&minus;)">&minus;</button>
+  <button id="btnZoomReset" title="Reset zoom (0)">100%</button>
+  <button id="btnZoomIn" title="Zoom in (+)">+</button>
+  <button id="btnLayout" title="Layout (S)">&#9647;</button>
+  <button id="btnBookmark" title="Bookmark this page (B)">&#128278;</button>
+  <button id="btnMarks" title="Bookmarks &amp; contents (M)">&#9776;</button>
+  <button id="btnFull" title="Fullscreen (F)">&#x26F6;</button>
+</div>
+<aside id="marks" aria-label="Bookmarks and contents">
+  <div class="hd"><h3>Bookmarks</h3><button id="marksClose" title="Close (Esc)">&#10005;</button></div>
+  <form class="add" id="markAdd">
+    <label>Page <input type="number" id="markPage" min="1" value="{{ start_page }}"></label>
+    <input type="text" id="markLabel" placeholder="Label (optional)" maxlength="80">
+    <button type="submit" title="Add bookmark">Add</button>
+  </form>
+  <div class="body">
+    <h4>Your bookmarks</h4>
+    <div id="markList"></div>
+    <h4>Contents</h4>
+    <div id="tocList"><div class="empty">Reading the PDF's table of contents&hellip;</div></div>
+  </div>
+</aside>
+<div id="stage">
+  <div id="loading">Opening&hellip;</div>
+  <div id="bookWrap"><div id="book"></div></div>
+  <div id="scroll"><div class="col" id="scrollCol"></div></div>
+</div>
+<div id="toast"></div>
+<script src="{{ request.url_for('static', path='reader/page-flip.browser.js') }}"></script>
+<script type="module">
+  import * as pdfjsLib from "{{ request.url_for('static', path='reader/pdfjs/pdf.min.mjs') }}";
+  import { RecipeReader } from "{{ request.url_for('static', path='reader/recipe_reader.js') }}";
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "{{ request.url_for('static', path='reader/pdfjs/pdf.worker.min.mjs') }}";
+  new RecipeReader(pdfjsLib, {
+    url: "{{ request.url_for('recipe_file', recipe_id=r.id) }}",
+    progressUrl: "{{ request.url_for('recipe_progress', recipe_id=r.id) }}",
+    bookmarksUrl: "{{ request.url_for('recipe_bookmark_add', recipe_id=r.id) }}",
+    startPage: {{ start_page }},
+    bookmarks: {{ bookmarks | tojson }},
+    defaultLayout: "{{ 'scroll' if embed else '' }}" || null,
+  });
+</script>
+</body>
+</html>

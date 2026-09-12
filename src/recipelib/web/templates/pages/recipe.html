@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}{{ r.title }} — Recipe Library{% endblock %}
+{% block content %}
+<article class="recipe">
+  <header class="recipe-head">
+    <div class="cover-lg">
+      {% if r.cover_asset_id %}<img src="{{ request.url_for('asset', asset_id=r.cover_asset_id) }}" alt="">
+      {% elif r.thumb_asset_id %}<img class="page" src="{{ request.url_for('asset', asset_id=r.thumb_asset_id) }}" alt="">
+      {% else %}<div class="placeholder">🍽</div>{% endif %}
+    </div>
+    <div class="head-text">
+      <h1>{{ r.title }}</h1>
+      {% if r.status == 'processing' %}
+        <div class="banner processing" hx-get="{{ request.url_for('recipe_detail', recipe_id=r.id) }}" hx-trigger="every 3s" hx-select="article.recipe" hx-target="closest article" hx-swap="outerHTML">Still working on this one: reading the PDF and pulling out the recipe…</div>
+      {% elif r.status == 'needs_review' %}
+        <div class="banner review">The recipe text could not be fully extracted. <a href="{{ request.url_for('recipe_edit', recipe_id=r.id) }}">Review and fix it</a> with the PDF alongside, or <form class="inline" method="post" action="{{ request.url_for('recipe_reextract', recipe_id=r.id) }}"><button class="linklike">try extracting again</button></form>.</div>
+      {% elif r.status == 'failed' %}
+        <div class="banner failed">Capture failed. The PDF is saved; you can <a href="{{ request.url_for('recipe_edit', recipe_id=r.id) }}">enter the recipe by hand</a>.</div>
+      {% endif %}
+      {% if r.description %}<p class="desc">{{ r.description }}</p>{% endif %}
+      <div class="facts">
+        {% if r.servings or r.yield_text %}<span>🍽 {{ r.yield_text or (r.servings|int if r.servings == r.servings|int else r.servings) ~ ' servings' }}</span>{% endif %}
+        {% if r.prep_min %}<span>Prep {{ r.prep_min|mins }}</span>{% endif %}
+        {% if r.cook_min %}<span>Cook {{ r.cook_min|mins }}</span>{% endif %}
+        {% if r.total_min %}<span>Total {{ r.total_min|mins }}</span>{% endif %}
+        {% if r.source_url %}<span><a href="{{ r.source_url }}" target="_blank" rel="noopener">{{ r.source_name or 'Source' }} ↗</a></span>{% elif r.source_name %}<span>{{ r.source_name }}</span>{% endif %}
+      </div>
+      {% include "partials/tags.html" %}
+      <div class="actions">
+        <a class="btn primary" href="{{ request.url_for('recipe_read', recipe_id=r.id) }}">📖 Read PDF</a>
+        <a class="btn" href="{{ request.url_for('recipe_edit', recipe_id=r.id) }}">✎ Edit</a>
+        {% include "partials/fav_button.html" %}
+        <a class="btn" href="{{ request.url_for('recipe_file', recipe_id=r.id) }}?dl=1">⬇ PDF</a>
+        <form method="post" action="{{ request.url_for('recipe_delete', recipe_id=r.id) }}" onsubmit="return confirm('Delete this recipe? The PDF stays in the assets folder.')"><button class="btn danger">Delete</button></form>
+      </div>
+      {% if bookmarks %}
+      <div class="bm-chips">
+        {% for b in bookmarks %}<a class="chip" href="{{ request.url_for('recipe_read', recipe_id=r.id) }}?page={{ b.page }}">🔖 {{ b.label }}</a>{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </header>
+
+  {% if r.ingredients or r.steps %}
+  <div class="recipe-body">
+    <section class="ingredients">
+      <h2>Ingredients</h2>
+      {% for group, items in r.ingredient_groups() %}
+        {% if group %}<h3>{{ group }}</h3>{% endif %}
+        <ul>
+        {% for i in items %}
+          <li><span class="q">{{ i.quantity|qty(i.unit) }}{% if i.quantity_max %}–{{ i.quantity_max|qty(i.unit) }}{% endif %} {{ i.unit_raw or '' }}</span> {{ i.name }}{% if i.preparation %}<span class="prep">, {{ i.preparation }}</span>{% endif %}{% if i.optional %} <em>(optional)</em>{% endif %}</li>
+        {% endfor %}
+        </ul>
+      {% endfor %}
+    </section>
+    <section class="steps">
+      <h2>Directions</h2>
+      {% for group, items in r.step_groups() %}
+        {% if group %}<h3>{{ group }}</h3>{% endif %}
+        <ol>
+        {% for st in items %}<li>{{ st.text }}</li>{% endfor %}
+        </ol>
+      {% endfor %}
+    </section>
+  </div>
+  {% elif r.status == 'ready' or r.status == 'needs_review' %}
+  <p class="muted">No structured recipe yet. Open the PDF to read it, or edit to add ingredients and steps.</p>
+  {% endif %}
+  {% if r.notes %}<section class="notes"><h2>Notes</h2><p>{{ r.notes }}</p></section>{% endif %}
+</article>
+{% endblock %}

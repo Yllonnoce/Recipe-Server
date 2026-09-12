@@ -1,0 +1,42 @@
+<div class="cards-head">
+  <span>{{ total }} recipe{{ '' if total == 1 else 's' }}{% if f.q %} for “{{ f.q }}”{% endif %}{% if f.tag %} · {{ f.tag.split(':',1)[1] }}{% endif %}</span>
+</div>
+{% if not recipes %}
+<div class="empty-state">
+  {% if f.q or f.tag or f.favorites or f.status %}
+    <p>Nothing matches.</p>
+  {% else %}
+    <p>Your library is empty.</p>
+    <p><a class="btn primary" href="{{ request.url_for('capture') }}">Add your first recipe</a></p>
+    <p class="muted">Paste a URL, upload a PDF, drop a file in the inbox folder, or print to the “Recipe Library” printer from any device.</p>
+  {% endif %}
+</div>
+{% endif %}
+<div class="cards">
+{% for r in recipes %}
+  <a class="card status-{{ r.status }}" href="{{ request.url_for('recipe_detail', recipe_id=r.id) }}"
+     {% if r.status == 'processing' %}hx-get="{{ request.url_for('library_cards') }}?q={{ f.q|urlencode }}&tag={{ (f.tag or '')|urlencode }}&fav={{ '1' if f.favorites else '' }}&status={{ f.status or '' }}&page={{ f.page }}" hx-trigger="every 3s" hx-target="#cards"{% endif %}>
+    <div class="cover">
+      {% if r.cover_asset_id %}<img src="{{ request.url_for('asset', asset_id=r.cover_asset_id) }}" alt="" loading="lazy">
+      {% elif r.thumb_asset_id %}<img class="page" src="{{ request.url_for('asset', asset_id=r.thumb_asset_id) }}" alt="" loading="lazy">
+      {% else %}<div class="placeholder">🍽</div>{% endif %}
+      {% if r.favorite %}<span class="heart">♥</span>{% endif %}
+      {% if r.status != 'ready' %}<span class="badge {{ r.status }}">{{ status_label[r.status] }}</span>{% endif %}
+    </div>
+    <div class="meta">
+      <h3>{{ r.title }}</h3>
+      <div class="sub">
+        {% if r.total_min %}<span>⏱ {{ r.total_min|mins }}</span>{% endif %}
+        {% for t in r.tags if t.kind in ('course','cuisine') %}<span class="chip">{{ t.name }}</span>{% endfor %}
+      </div>
+    </div>
+  </a>
+{% endfor %}
+</div>
+{% if pages > 1 %}
+<nav class="pager">
+  {% for p in range(1, pages + 1) %}
+    <a class="{{ 'on' if p == f.page }}" hx-get="{{ request.url_for('library_cards') }}?q={{ f.q|urlencode }}&tag={{ (f.tag or '')|urlencode }}&fav={{ '1' if f.favorites else '' }}&status={{ f.status or '' }}&sort={{ f.sort }}&page={{ p }}" hx-target="#cards" href="#">{{ p }}</a>
+  {% endfor %}
+</nav>
+{% endif %}

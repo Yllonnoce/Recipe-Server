@@ -1,0 +1,1 @@
+<button class="btn icon {{ 'on' if r.favorite }}" hx-post="{{ request.url_for('recipe_favorite', recipe_id=r.id) }}" hx-swap="outerHTML" title="{{ 'Remove from favorites' if r.favorite else 'Add to favorites' }}">{{ '♥' if r.favorite else '♡' }}</button>

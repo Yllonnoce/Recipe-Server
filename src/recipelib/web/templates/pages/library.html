@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="library">
+  <aside class="filters">
+    <form class="search" hx-get="{{ request.url_for('library_cards') }}" hx-trigger="input changed delay:300ms from:#q, submit" hx-target="#cards" hx-include="#filters" hx-push-url="false">
+      <input id="q" name="q" type="search" placeholder="Search recipes, ingredients…" value="{{ f.q }}" autocomplete="off">
+    </form>
+    <div id="filters">
+      <input type="hidden" name="tag" value="{{ f.tag or '' }}">
+      <input type="hidden" name="fav" value="{{ '1' if f.favorites else '' }}">
+      <input type="hidden" name="status" value="{{ f.status or '' }}">
+      <input type="hidden" name="sort" value="{{ f.sort }}">
+    </div>
+    <h4>Show</h4>
+    <ul class="facets">
+      <li><a class="{{ 'on' if not f.tag and not f.favorites and not f.status }}" href="{{ request.url_for('library') }}">All recipes</a></li>
+      <li><a class="{{ 'on' if f.favorites }}" href="{{ request.url_for('library') }}?fav=1">♥ Favorites</a></li>
+      {% if status_counts.get('needs_review') %}<li><a class="{{ 'on' if f.status == 'needs_review' }}" href="{{ request.url_for('library') }}?status=needs_review">Needs review <span class="n">{{ status_counts['needs_review'] }}</span></a></li>{% endif %}
+      {% if status_counts.get('processing') %}<li><a class="{{ 'on' if f.status == 'processing' }}" href="{{ request.url_for('library') }}?status=processing">Processing <span class="n">{{ status_counts['processing'] }}</span></a></li>{% endif %}
+    </ul>
+    {% for kind, label in [('course','Course'),('cuisine','Cuisine'),('custom','Tags'),('source','Source')] %}
+      {% if tags.get(kind) %}
+      <h4>{{ label }}</h4>
+      <ul class="facets">
+        {% for name, n in tags[kind] %}
+        <li><a class="{{ 'on' if f.tag == kind ~ ':' ~ name }}" href="{{ request.url_for('library') }}?tag={{ kind }}:{{ name | urlencode }}">{{ name }} <span class="n">{{ n }}</span></a></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    {% endfor %}
+    <h4>Sort</h4>
+    <ul class="facets">
+      {% for key, label in [('newest','Newest'),('title','Title'),('favorites','Favorites first')] %}
+      <li><a class="{{ 'on' if f.sort == key }}" href="{{ request.url_for('library') }}?sort={{ key }}{% if f.tag %}&tag={{ f.tag|urlencode }}{% endif %}{% if f.favorites %}&fav=1{% endif %}">{{ label }}</a></li>
+      {% endfor %}
+    </ul>
+  </aside>
+  <section id="cards" class="cards-wrap">
+    {% include "partials/cards.html" %}
+  </section>
+</div>
+<a class="fab" href="{{ request.url_for('capture') }}" title="Add a recipe">+</a>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% if not jobs %}<p class="muted">No captures yet.</p>{% endif %}
+<table class="jobs">
+{% for row in jobs %}{% set j = row.j %}{% set r = row.r %}
+  <tr class="state-{{ j.state }}">
+    <td class="src">{{ {'url':'🔗','upload':'⬆','watch':'📁','printer':'🖨'}.get(j.source, j.source) }}</td>
+    <td class="what">
+      {% if r %}<a href="{{ request.url_for('recipe_detail', recipe_id=r.id) }}">{{ r.title }}</a>
+      {% else %}{{ j.title_hint or j.input_url or (j.input_path or '')|replace('\\','/')|split('/')|last if false else (j.title_hint or j.input_url or 'capture #' ~ j.id) }}{% endif %}
+      {% if j.duplicate_of %}<span class="muted">(already in library)</span>{% endif %}
+    </td>
+    <td class="state"><span class="badge {{ j.state }}">{{ j.state|replace('_',' ') }}</span>{% if j.state == 'running' and j.stage %} <span class="muted">{{ j.stage }}</span>{% endif %}</td>
+    <td class="err">{% if j.last_error %}<span title="{{ j.last_error }}">{{ j.last_error[:80] }}</span>{% endif %}</td>
+    <td class="act">
+      {% if j.state in ('failed','waiting_llm','canceled') %}<button class="btn small" hx-post="{{ request.url_for('job_retry', job_id=j.id) }}" hx-target="#jobs">Retry</button>{% endif %}
+      {% if j.state in ('queued','waiting_llm') %}<button class="btn small" hx-post="{{ request.url_for('job_cancel', job_id=j.id) }}" hx-target="#jobs">Cancel</button>{% endif %}
+    </td>
+  </tr>
+{% endfor %}
+</table>

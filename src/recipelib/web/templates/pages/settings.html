@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Settings — Recipe Library{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+{% if message %}<div class="banner info">{{ message }}</div>{% endif %}
+<div class="capture-grid">
+  <section class="panel">
+    <h2>This server</h2>
+    <table class="kv">
+      <tr><th>Version</th><td>{{ version }}</td></tr>
+      <tr><th>Config file</th><td><code>{{ config_path }}</code></td></tr>
+      <tr><th>Library folder</th><td><code>{{ cfg.library_dir }}</code></td></tr>
+      <tr><th>Inbox folder</th><td><code>{{ cfg.inbox_dir }}</code></td></tr>
+      <tr><th>Web</th><td>http://{{ host }}:{{ cfg.port }}</td></tr>
+      <tr><th>Printer</th><td>{% if printer %}<strong>{{ cfg.printer_name }}</strong> at <code>ipp://{{ host }}:{{ cfg.ipp_port }}/ipp/print</code>{% else %}off{% endif %}</td></tr>
+      <tr><th>LLM</th><td>{{ cfg.ollama_model }} via {{ cfg.ollama_host }} ({{ 'on' if cfg.llm_enabled else 'off' }})</td></tr>
+      <tr><th>OCR</th><td>{{ 'on' if cfg.ocr_enabled else 'off' }}</td></tr>
+      <tr><th>Paper</th><td>{{ cfg.paper }}</td></tr>
+    </table>
+    <p class="muted">Edit the config file and restart the server to change these.</p>
+  </section>
+  <section class="panel">
+    <h2>Health</h2>
+    <table class="kv">
+      {% for c in checks %}<tr><th>{{ '✅' if c.ok else '⚠️' }} {{ c.name }}</th><td>{{ c.detail }}</td></tr>{% endfor %}
+    </table>
+  </section>
+  <section class="panel">
+    <h2>Maintenance</h2>
+    <form method="post" action="{{ request.url_for('settings_reindex') }}"><button class="btn">Rebuild search index</button></form>
+  </section>
+</div>
+{% endblock %}
