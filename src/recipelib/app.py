@@ -43,6 +43,7 @@ async def lifespan(app: FastAPI):
     setup_logging(cfg)
     migrate(cfg.db_path)
     init_engine(cfg.db_path)
+    _startup_housekeeping()
     queue = JobQueue(workers=cfg.workers)
     set_queue(queue)
     queue.start()
@@ -67,6 +68,21 @@ async def lifespan(app: FastAPI):
             printer.stop()
         watcher.stop()
         queue.stop()
+
+
+def _startup_housekeeping() -> None:
+    """Idempotent fix-ups run on every start: seed the fixed categories and
+    categorise recipes that predate them."""
+    from .db.engine import session_scope
+    from .domain import recipes as R
+    try:
+        with session_scope() as s:
+            made = R.seed_categories(s)
+            n = R.categorize_missing(s)
+        if made or n:
+            log.info("startup: %d categories seeded, %d recipes categorised", made, n)
+    except Exception:  # noqa: BLE001
+        log.exception("startup housekeeping failed (continuing)")
 
 
 def create_app() -> FastAPI:

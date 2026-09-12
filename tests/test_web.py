@@ -149,6 +149,33 @@ def test_inbox_watch_and_image_upload(client, library, tmp_path):
     assert client.get("/partials/jobs").text.count("done") >= 2
 
 
+def test_startup_seeds_and_backfills_categories(library, tmp_path):
+    from fastapi.testclient import TestClient
+    from sqlalchemy import select as sel
+    from recipelib.app import create_app
+    from recipelib.db.engine import session_scope
+    from recipelib.db.models import Recipe, Tag
+    with TestClient(create_app()) as c:
+        with session_scope() as s:
+            assert s.scalar(sel(Tag).where(Tag.kind == "category", Tag.name == "Seafood")) is not None
+        pdf = make_pdf(tmp_path / "s.pdf", ["Shrimp Tacos"])
+        with pdf.open("rb") as fh:
+            c.post("/capture/upload", files=[("files", ("Shrimp_Tacos.pdf", fh, "application/pdf"))])
+        wait_for(lambda: "done" in c.get("/partials/jobs").text and "running" not in c.get("/partials/jobs").text)
+        with session_scope() as s:
+            r = s.scalars(sel(Recipe)).first()
+            rid = r.id
+            r.tags = [t for t in r.tags if t.kind != "category"]     # pretend it predates categories
+            from recipelib.domain.recipes import replace_ingredients
+            from recipelib.extract.normalize import parse_ingredient_block
+            replace_ingredients(s, r, parse_ingredient_block("1 lb shrimp\n8 tortillas"))
+    # a second start (same library) backfills it
+    with TestClient(create_app()) as c:
+        with session_scope() as s:
+            names = sorted(t.name for t in s.get(Recipe, rid).tags_of("category"))
+        assert "Seafood" in names and "Dinner" in names
+
+
 def test_pwa_files(client):
     assert client.get("/sw.js").headers["content-type"].startswith("application/javascript")
     m = client.get("/static/manifest.webmanifest")

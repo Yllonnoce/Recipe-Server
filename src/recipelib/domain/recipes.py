@@ -250,6 +250,31 @@ def assign_categories(s: Session, r: Recipe, extra: list[str] = (), replace: boo
     return names
 
 
+def seed_categories(s: Session) -> int:
+    """Make sure every fixed category exists as a tag (so an empty library
+    already shows them). Returns how many were created."""
+    from .categories import NAMES
+    made = 0
+    for name in NAMES:
+        if s.scalar(select(Tag).where(Tag.kind == "category", Tag.name == name)) is None:
+            s.add(Tag(name=name, kind="category"))
+            made += 1
+    s.flush()
+    return made
+
+
+def categorize_missing(s: Session) -> int:
+    """Assign categories to recipes that have none yet (startup backfill)."""
+    n = 0
+    for r in s.scalars(select(Recipe).where(Recipe.deleted_at.is_(None))):
+        if r.tags_of("category") or not (r.ingredients or r.title):
+            continue
+        if assign_categories(s, r):
+            fts.reindex_recipe(s, r.id)
+            n += 1
+    return n
+
+
 def categorize_all(s: Session, replace: bool = False) -> int:
     n = 0
     for r in s.scalars(select(Recipe).where(Recipe.deleted_at.is_(None))):

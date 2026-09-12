@@ -19,8 +19,14 @@ def init(force: bool = typer.Option(False, help="overwrite an existing config fi
     p = write_default_config(force=force)
     cfg = get_settings(reload=True)
     cfg.ensure_dirs()
+    from .db.engine import init_engine, session_scope
     from .db.migrate import migrate
+    from .domain import recipes as R
     v = migrate(cfg.db_path)
+    init_engine(cfg.db_path)
+    with session_scope() as s:
+        R.seed_categories(s)
+        R.categorize_missing(s)
     typer.echo(f"config:  {p}")
     typer.echo(f"library: {cfg.library_dir}  (schema v{v})")
     typer.echo("next:    recipes serve")
