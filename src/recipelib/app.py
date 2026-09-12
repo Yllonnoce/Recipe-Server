@@ -29,7 +29,9 @@ def setup_logging(cfg) -> None:
         fh = RotatingFileHandler(cfg.logs_dir / "recipelib.log", maxBytes=5_000_000, backupCount=3, encoding="utf-8")
         fh.setFormatter(fmt)
         root.addHandler(fh)
-    if not any(isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler) for h in root.handlers):
+    import sys
+    has_console = sys.stderr is not None      # pythonw.exe / a hidden service has no console
+    if has_console and not any(isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler) for h in root.handlers):
         sh = logging.StreamHandler()
         sh.setFormatter(fmt)
         root.addHandler(sh)

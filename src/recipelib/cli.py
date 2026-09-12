@@ -48,8 +48,9 @@ def serve(host: str | None = None, port: int | None = None, ipp_port: int | None
     ssl = {}
     if cfg.ssl_certfile and cfg.ssl_keyfile:
         ssl = {"ssl_certfile": str(cfg.ssl_certfile), "ssl_keyfile": str(cfg.ssl_keyfile)}
+    # log_config=None: uvicorn writes through our root logger (file + console when there is one)
     uvicorn.run("recipelib.app:app", host=cfg.host, port=cfg.port, reload=reload,
-                log_level=cfg.log_level.lower(), access_log=False, **ssl)
+                log_level=cfg.log_level.lower(), access_log=False, log_config=None, **ssl)
 
 
 @cli.command()

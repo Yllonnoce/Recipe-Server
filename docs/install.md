@@ -12,14 +12,13 @@ Linux / macOS (from the project folder):
 ./install.sh --service        # --service: start at login; --no-model to skip the 5 GB model
 ```
 
-Windows (PowerShell, from the project folder):
+Windows (double-click `install.bat`, or from a command prompt in the project folder):
 
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # once, if scripts are blocked
-.\install.ps1 -Service -Firewall
+```bat
+install.bat /service /firewall
 ```
 
-`-Firewall` adds the Windows Firewall rules other devices need (asks for admin). On Linux
+`/firewall` adds the Windows Firewall rules other devices need (asks for admin). On Linux
 the installer opens the ports in ufw when ufw is active; on macOS the built-in firewall
 prompts the first time the server starts.
 
@@ -73,14 +72,15 @@ Every config key can be overridden with an environment variable: `RECIPELIB_PORT
 ## Running at boot
 
 `./install.sh --service` (Linux: systemd user unit, macOS: launchd agent) and
-`.\install.ps1 -Service` (Windows: Task Scheduler at login) set this up. To do it by
+`install.bat /service` (Windows: Task Scheduler at login, no window) set this up. To do it by
 hand, `recipes service-template systemd`, `launchd` or `windows-task` prints a ready-to-use
 definition with the right paths for this machine.
 
 To remove: Linux `systemctl --user disable --now recipelib`; macOS
 `launchctl unload ~/Library/LaunchAgents/com.recipelib.server.plist`; Windows
-`Unregister-ScheduledTask -TaskName "Recipe Library"`. Deleting the `.venv` folder removes
-the app; your recipes stay in `~/RecipeLibrary`.
+`schtasks /Delete /TN "Recipe Library" /F`. Or run `./uninstall.sh` / `uninstall.bat`, which
+remove the service, firewall rules, environment and config; add `--purge` / `/purge` to
+also delete the library. Your recipes otherwise stay in `~/RecipeLibrary`.
 
 ## Backups
 

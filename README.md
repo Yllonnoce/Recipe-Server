@@ -24,7 +24,7 @@ search, read, cook, plan meals and build a shopping list from any browser.
 
 ```bash
 ./install.sh --service            # Linux / macOS
-.\install.ps1 -Service -Firewall  # Windows (PowerShell)
+install.bat /service /firewall    # Windows (or double-click install.bat)
 ```
 
 The installer fetches its own Python, the app, the browser and the model, then starts
