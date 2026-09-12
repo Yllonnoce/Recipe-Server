@@ -26,6 +26,26 @@
     </table>
   </section>
   <section class="panel">
+    <h2>Updates</h2>
+    <table class="kv">
+      <tr><th>Version</th><td>{{ ver.version }}{% if ver.commit %} · {{ ver.commit }} ({{ ver.date }}) on {{ ver.branch }}{% endif %}</td></tr>
+      {% if ver.is_git %}<tr><th>Source</th><td><code>{{ ver.remote or 'no remote set' }}</code></td></tr>{% endif %}
+      <tr><th>Status</th><td>
+        {% if upd.updating %}Updating now…
+        {% elif upd.error %}{{ upd.error }}
+        {% elif upd.behind %}<strong>Newer version available</strong> ({{ upd.behind }} change{{ 's' if upd.behind != 1 }})
+        {% elif upd.checked_at %}Up to date
+        {% else %}Not checked yet{% endif %}
+      </td></tr>
+    </table>
+    <div class="actions">
+      <form method="post" action="{{ request.url_for('settings_update_check') }}"><button class="btn">Check for updates</button></form>
+      <form method="post" action="{{ request.url_for('settings_update_run') }}" onsubmit="return confirm('Pull the latest version, install it and restart the server?')"><button class="btn primary" {{ 'disabled' if not ver.is_git }}>Update now</button></form>
+    </div>
+    {% if upd.last_log %}<pre class="log">{{ upd.last_log }}</pre>{% endif %}
+    {% if not ver.is_git %}<p class="muted">Updates need the app to be installed from a git clone (<code>git clone &lt;url&gt;</code> then <code>./install.sh</code>).</p>{% endif %}
+  </section>
+  <section class="panel">
     <h2>Maintenance</h2>
     <form method="post" action="{{ request.url_for('settings_reindex') }}"><button class="btn">Rebuild search index</button></form>
     <p></p>

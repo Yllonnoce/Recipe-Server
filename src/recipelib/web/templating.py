@@ -27,3 +27,6 @@ templates.env.filters["mins"] = minutes_human
 templates.env.globals["status_label"] = {
     "processing": "Processing", "needs_review": "Needs review", "ready": "Ready", "failed": "Failed",
 }
+
+from .. import updater  # noqa: E402
+templates.env.globals["update_state"] = updater.STATE

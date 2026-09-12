@@ -28,7 +28,8 @@ install.bat /service /firewall    # Windows (or double-click install.bat)
 ```
 
 The installer fetches its own Python, the app, the browser and the model, then starts
-the server at login. Manual steps are in the docs.
+the server at login. Manual steps are in the docs. Update later from the Settings page or
+with `recipes update`.
 
 Open `http://<this-machine>:8000`. See [docs/install.md](docs/install.md),
 [docs/printer.md](docs/printer.md) and [docs/devices.md](docs/devices.md).

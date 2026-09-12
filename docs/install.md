@@ -86,6 +86,27 @@ Every config key can be overridden with an environment variable: `RECIPELIB_PORT
 | TCP 8631 | the virtual printer (IPP) |
 | UDP 5353 | mDNS/Bonjour discovery of the printer |
 
+## Updating
+
+Install from a git clone and updates are one step:
+
+```bash
+git clone https://github.com/Yllonnoce/Recipe-Server.git HomeServer && cd HomeServer
+./install.sh --service            # first time
+```
+
+Later, any of these pulls the newest version, installs new dependencies, runs database
+migrations and restarts the server:
+
+- **Settings page** → "Check for updates" / "Update now". A small "update" badge appears next
+  to Settings in the header when a newer version has been published (checked once a day).
+- `recipes update` from a terminal (`recipes update --check` only reports).
+- Re-running `./install.sh` / `install.bat`, which also upgrades in place.
+
+The update is a fast-forward `git pull`, so local edits to the code are never overwritten;
+if you have changed files and the pull cannot fast-forward, the Settings page shows git's
+message and nothing else changes.
+
 ## Running at boot
 
 `./install.sh --service` (Linux: systemd user unit, macOS: launchd agent) and

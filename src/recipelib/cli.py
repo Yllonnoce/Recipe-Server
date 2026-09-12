@@ -101,6 +101,60 @@ def categorize(replace: bool = typer.Option(False, help="drop existing categorie
 
 
 @cli.command()
+def update(no_restart: bool = typer.Option(False, "--no-restart", help="don't restart the running server"),
+           check_only: bool = typer.Option(False, "--check", help="only report whether an update exists")):
+    """Pull the latest version from git, install it, migrate, restart the service."""
+    from . import updater
+    v = updater.current()
+    typer.echo(f"installed: {v.version} {v.commit or ''} {('on ' + v.branch) if v.branch else ''}")
+    r = updater.check()
+    if r["error"]:
+        typer.echo("!! " + r["error"])
+        raise typer.Exit(code=1)
+    typer.echo("up to date" if not r["behind"] else f"{r['behind']} change(s) available ({r['remote_commit']})")
+    if check_only or not r["behind"]:
+        return
+    ok, out = updater.update(restart=False, logger=typer.echo)
+    if not ok:
+        raise typer.Exit(code=1)
+    if not no_restart:
+        _restart_service()
+
+
+def _restart_service() -> None:
+    import shutil
+    import subprocess
+    if sys.platform.startswith("linux") and shutil.which("systemctl"):
+        if subprocess.run(["systemctl", "--user", "is-enabled", "recipelib"], capture_output=True).returncode == 0:
+            subprocess.run(["systemctl", "--user", "restart", "recipelib"])
+            typer.echo("restarted the systemd service")
+            return
+    elif sys.platform == "darwin":
+        plist = Path.home() / "Library/LaunchAgents/com.recipelib.server.plist"
+        if plist.exists():
+            import os
+            subprocess.run(["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/com.recipelib.server"])
+            typer.echo("restarted the launchd agent")
+            return
+    elif sys.platform == "win32":
+        r = subprocess.run(["schtasks", "/Query", "/TN", "Recipe Library"], capture_output=True)
+        if r.returncode == 0:
+            subprocess.run(["schtasks", "/End", "/TN", "Recipe Library"], capture_output=True)
+            subprocess.run(["schtasks", "/Run", "/TN", "Recipe Library"], capture_output=True)
+            typer.echo("restarted the scheduled task")
+            return
+    typer.echo("restart the server to load the new version (recipes serve)")
+
+
+@cli.command()
+def version():
+    """Show the installed version and git commit."""
+    from . import updater
+    v = updater.current()
+    typer.echo(f"{v.version}" + (f" ({v.commit}, {v.date}, {v.branch})" if v.commit else ""))
+
+
+@cli.command()
 def backup(out: Path | None = None):
     """Zip the database and assets into the backups folder."""
     import sqlite3

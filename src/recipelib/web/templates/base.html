@@ -25,7 +25,7 @@
     <a href="{{ request.url_for('capture') }}">Add</a>
     <a href="{{ request.url_for('shopping') }}">Shopping</a>
     <a href="{{ request.url_for('plan') }}">Plan</a>
-    <a href="{{ request.url_for('settings') }}">Settings</a>
+    <a href="{{ request.url_for('settings') }}">Settings{% if update_state.behind %} <span class="upd" title="A newer version is available">update</span>{% endif %}</a>
     <button class="fs" type="button" id="fsBtn" title="Full screen for this page. For full screen that stays on, add the app to your home screen.">&#x26F6;</button>
   </nav>
 </header>

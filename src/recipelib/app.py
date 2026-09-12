@@ -58,12 +58,16 @@ async def lifespan(app: FastAPI):
         except Exception:  # noqa: BLE001
             log.exception("virtual printer failed to start; continuing without it")
             printer = None
+    from .updater import Checker
+    checker = Checker()
+    checker.start()
     app.state.queue = queue
     app.state.printer = printer
     log.info("Recipe Library %s ready on http://%s:%s", __version__, cfg.host, cfg.port)
     try:
         yield
     finally:
+        checker.stop()
         if printer is not None:
             printer.stop()
         watcher.stop()
