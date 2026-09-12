@@ -82,6 +82,7 @@ def test_upload_to_library(client, library, tmp_path):
     assert "Fluffy Pancakes" in client.get("/partials/cards", params={"q": "weekend"}).text
     # categories: ticked on the edit page, auto-assigned via settings, browsable in the sidebar
     r = client.post(f"/recipes/{rid}/edit", data={"title": "Fluffy Pancakes", "ingredients": "2 cups flour\n2 eggs", "steps": "Fry.",
+                                                  "course": "breakfast", "cuisine": "american", "tags": "kids, weekend",
                                                   "_categories_present": "1", "categories": ["Breakfast", "Vegetarian"]}, follow_redirects=False)
     assert r.status_code == 303
     with session_scope() as s:

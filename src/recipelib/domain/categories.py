@@ -94,6 +94,9 @@ def suggest(title: str, ingredient_names: list[str], courses: list[str] = (), ll
         if _RX[name].search(ings):
             found.add(name)
     sweet_or_other = found & {"Dessert", "Baking", "Sauces & Condiments", "Snack"}
+    # plant milks and "vegan cheese" are not animal products
+    ings = re.sub(r"\b(oat|almond|soy|soya|coconut|rice|cashew|hemp|pea|macadamia)\s+milk\b", "plantmilk", ings)
+    ings = re.sub(r"\bvegan\s+\w+", "veganitem", ings)
     if not (found & _MEAT) and not sweet_or_other and ings.strip():
         found.add("Vegetarian")
         if not _ANIMAL.search(ings):
