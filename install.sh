@@ -107,6 +107,19 @@ if [ "$OS" = "Linux" ] && have ufw && sudo -n ufw status 2>/dev/null | grep -q "
   sudo ufw allow 8000/tcp >/dev/null && sudo ufw allow 8631/tcp >/dev/null && sudo ufw allow 5353/udp >/dev/null || warn "could not change ufw; open TCP 8000, 8631 and UDP 5353 yourself"
 fi
 
+# ---------------------------------------------------------------- firewall (macOS application firewall)
+if [ "$OS" = "Darwin" ]; then
+  FW=/usr/libexec/ApplicationFirewall/socketfilterfw
+  if [ -x "$FW" ] && "$FW" --getglobalstate 2>/dev/null | grep -qi "enabled"; then
+    say "Allowing the app through the macOS firewall (needs your password)"
+    PYREAL="$(cd "$HERE" && "$PY" -c 'import sys, os; print(os.path.realpath(sys.executable))')"
+    sudo "$FW" --add "$PYREAL" >/dev/null 2>&1 || true
+    sudo "$FW" --unblockapp "$PYREAL" >/dev/null 2>&1 || warn "could not unblock $PYREAL; allow it under System Settings > Network > Firewall > Options"
+    sudo "$FW" --add "$HERE/.venv/bin/recipes" >/dev/null 2>&1 || true
+    sudo "$FW" --unblockapp "$HERE/.venv/bin/recipes" >/dev/null 2>&1 || true
+  fi
+fi
+
 # ---------------------------------------------------------------- nginx on port 80
 if [ "$NGINX" = 1 ]; then
   say "Putting nginx in front of the app on port 80"
