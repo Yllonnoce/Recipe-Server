@@ -24,6 +24,15 @@ def shopping(request: Request, s: Session = Depends(get_db)):
     return templates.TemplateResponse(request, "pages/shopping.html", _ctx(s))
 
 
+@router.get("/shopping.txt", name="shopping_text")
+def shopping_text(request: Request, s: Session = Depends(get_db)):
+    """Plain text, one item per line. Paste into Google Keep and tap
+    'Show checkboxes' to get a checklist; also handy for automations."""
+    from fastapi.responses import PlainTextResponse
+    body = S.as_text(S.default_list(s), include_checked=request.query_params.get("all") == "1")
+    return PlainTextResponse(body + ("\n" if body else ""), headers={"Cache-Control": "no-store"})
+
+
 @router.get("/partials/shopping", name="shopping_partial")
 def shopping_partial(request: Request, s: Session = Depends(get_db)):
     return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s))

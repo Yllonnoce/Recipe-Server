@@ -1,8 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Shopping list — Recipe Library{% endblock %}
+{% block scripts %}
+<script>
+/* Share sheet on phones (pick Google Keep, then "Show checkboxes"); clipboard on desktop. */
+document.getElementById('shareBtn').addEventListener('click', async () => {
+  const r = await fetch("{{ request.url_for('shopping_text') }}", { cache: 'no-store' });
+  const text = (await r.text()).trim();
+  const btn = document.getElementById('shareBtn');
+  const flash = (m) => { const old = btn.textContent; btn.textContent = m; setTimeout(() => btn.textContent = old, 1800); };
+  if (!text) { flash('List is empty'); return; }
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Shopping list', text }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(text); flash('Copied — paste into Keep'); }
+  catch (e) { window.open("{{ request.url_for('shopping_text') }}", '_blank'); }
+});
+</script>
+{% endblock %}
 {% block content %}
 <div class="shop">
-  <h1>Shopping list</h1>
+  <div class="plan-head">
+    <h1>Shopping list</h1>
+    <button class="btn" id="shareBtn" type="button" title="Send the list to Google Keep, Notes, Messages…">📤 Share</button>
+    <a class="btn" href="{{ request.url_for('shopping_text') }}" target="_blank" title="Plain text, one item per line">Text</a>
+  </div>
   <form class="add" hx-post="{{ request.url_for('shopping_add_item') }}" hx-target="#list" hx-on::after-request="this.reset()">
     <input name="text" placeholder="Add an item, e.g. 2 lb apples" autocomplete="off" required>
     <button class="btn primary" type="submit">Add</button>

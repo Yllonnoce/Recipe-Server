@@ -158,3 +158,18 @@ def sources_of(item: ShoppingItem) -> list[str]:
         return sorted({str(x.get("title")) for x in json.loads(item.sources or "[]") if x.get("title")})
     except ValueError:
         return []
+
+
+def as_text(lst: ShoppingList, include_checked: bool = False) -> str:
+    """One item per line, ready to paste into Google Keep (Show checkboxes),
+    Notes, Reminders or a text message."""
+    from ..extract.normalize import format_quantity
+    lines = []
+    for _aisle, items in grouped(lst):
+        for it in items:
+            if it.checked and not include_checked:
+                continue
+            q = format_quantity(it.quantity, it.unit)
+            parts = [x for x in (q, it.unit or "", it.name) if x]
+            lines.append(" ".join(parts))
+    return "\n".join(lines)

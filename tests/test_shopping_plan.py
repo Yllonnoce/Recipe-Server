@@ -43,6 +43,10 @@ def test_shopping_merge_and_scale(client, library, tmp_path):
     assert "apple" in html
     html = client.post(f"/shopping/items/{garlic}/toggle").text
     assert 'row checked' in html
+    txt = client.get("/shopping.txt").text
+    assert "garlic" not in txt and "5 cup flour" in txt and "2 lb apples" in txt and "\ngarlic" not in txt
+    assert "6 clove garlic" in client.get("/shopping.txt?all=1").text
+    assert client.get("/shopping.txt").headers["content-type"].startswith("text/plain")
     html = client.post("/shopping/clear-checked").text
     assert "garlic" not in html and "apple" in html
     # cook mode page renders with the JSON payload
