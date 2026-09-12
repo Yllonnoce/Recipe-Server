@@ -3,16 +3,18 @@
 #
 #   ./uninstall.sh            stop + remove the service, firewall rules, .venv and config
 #   ./uninstall.sh --purge    ...and delete the library (all recipes, PDFs, database) after confirming
+#   ./uninstall.sh --nginx    ...and uninstall nginx itself (not just the Recipe Library site); needs sudo
 #
 # Left alone: uv, Ollama and its models, and Playwright's Chromium cache (~/.cache/ms-playwright).
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OS="$(uname -s)"
-PURGE=0
+PURGE=0; NGINX=0
 for a in "$@"; do
   case "$a" in
     --purge) PURGE=1 ;;
-    -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
+    --nginx) NGINX=1 ;;
+    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
     *) echo "unknown option: $a" >&2; exit 2 ;;
   esac
 done
@@ -58,16 +60,41 @@ if [ "$OS" = "Linux" ] && have ufw && sudo -n ufw status 2>/dev/null | grep -q "
   sudo ufw delete allow 8000/tcp >/dev/null 2>&1; sudo ufw delete allow 8631/tcp >/dev/null 2>&1; sudo ufw delete allow 5353/udp >/dev/null 2>&1
 fi
 
-# ---------------------------------------------------------------- nginx site
-if [ -e /etc/nginx/sites-enabled/recipelib ] || [ -e /etc/nginx/conf.d/recipelib.conf ]; then
-  say "Removing the nginx site (nginx itself stays installed)"
+# ---------------------------------------------------------------- nginx
+SITE_REMOVED=0
+if [ -e /etc/nginx/sites-enabled/recipelib ] || [ -e /etc/nginx/sites-available/recipelib ] || [ -e /etc/nginx/conf.d/recipelib.conf ]; then
+  say "Removing the Recipe Library nginx site"
   sudo rm -f /etc/nginx/sites-enabled/recipelib /etc/nginx/sites-available/recipelib /etc/nginx/conf.d/recipelib.conf
-  sudo nginx -t >/dev/null 2>&1 && sudo systemctl reload nginx || true
+  SITE_REMOVED=1
+  if [ "$NGINX" != 1 ]; then sudo nginx -t >/dev/null 2>&1 && sudo systemctl reload nginx || true; fi
 fi
 if [ "$OS" = "Darwin" ] && have brew && [ -e "$(brew --prefix)/etc/nginx/servers/recipelib.conf" ]; then
-  say "Removing the nginx site (nginx itself stays installed)"
-  rm -f "$(brew --prefix)/etc/nginx/servers/recipelib.conf"; sudo brew services restart nginx 2>/dev/null || true
+  say "Removing the Recipe Library nginx site"
+  rm -f "$(brew --prefix)/etc/nginx/servers/recipelib.conf"
+  SITE_REMOVED=1
+  if [ "$NGINX" != 1 ]; then sudo brew services restart nginx 2>/dev/null || true; fi
 fi
+if [ "$NGINX" = 1 ]; then
+  if have nginx; then
+    say "Uninstalling nginx"
+    if [ "$OS" = "Darwin" ]; then
+      sudo brew services stop nginx 2>/dev/null || true; brew services stop nginx 2>/dev/null || true
+      brew uninstall nginx || warn "brew could not remove nginx"
+    else
+      sudo systemctl disable --now nginx 2>/dev/null || true
+      if have apt-get; then sudo apt-get remove -y --purge nginx nginx-common nginx-core 2>/dev/null || sudo apt-get remove -y nginx
+      elif have dnf; then sudo dnf remove -y nginx
+      else warn "remove nginx with your package manager"; fi
+    fi
+  else
+    [ "$SITE_REMOVED" = 1 ] || warn "nginx is not installed; nothing to remove"
+  fi
+  if [ "$OS" = "Linux" ] && have ufw && sudo -n ufw status 2>/dev/null | grep -q "Status: active"; then sudo ufw delete allow 80/tcp >/dev/null 2>&1 || true; fi
+elif [ "$SITE_REMOVED" = 1 ]; then
+  echo "    nginx itself is still installed (re-run with --nginx to remove it too)"
+fi
+# the app was bound to 127.0.0.1 behind the proxy; if the config survives, put it back on the LAN
+if [ "$SITE_REMOVED" = 1 ] && [ -x "$HERE/.venv/bin/recipes" ]; then "$HERE/.venv/bin/recipes" config set host 0.0.0.0 >/dev/null 2>&1 || true; fi
 
 # ---------------------------------------------------------------- app + config
 if [ -d "$HERE/.venv" ]; then

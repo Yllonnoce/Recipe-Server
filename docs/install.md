@@ -35,6 +35,9 @@ you want to place it yourself.
 Windows: add `/port80`. Windows lets a normal user bind port 80, so no proxy is needed; the
 app simply listens there (and `/firewall` opens it).
 
+To take it away again: `./uninstall.sh` removes the Recipe Library site and leaves nginx
+installed; `./uninstall.sh --nginx` uninstalls nginx as well.
+
 Any setting can be changed later with `recipes config set <key> <value>`, e.g.
 `recipes config set port 80`, then restart the server.
 
