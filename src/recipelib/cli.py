@@ -1,6 +1,7 @@
 """`recipes` command line: init, serve, doctor, import, backup, service-template."""
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -272,6 +273,9 @@ def service_install():
     """Install and start the service (systemd user unit / launchd agent / Task Scheduler)."""
     import subprocess
     sp = _service_paths()
+    if sys.platform != "win32" and os.geteuid() == 0:
+        typer.echo("!! Run this as your own user, not root/sudo: the service is a per-user agent.", err=True)
+        raise typer.Exit(code=1)
     if sys.platform.startswith("linux"):
         import shutil
         if not shutil.which("systemctl"):
@@ -307,9 +311,11 @@ WantedBy=default.target
   <key>StandardErrorPath</key><string>{Path.home() / 'RecipeLibrary/logs/launchd.log'}</string>
 </dict></plist>
 """)
-        _run(["launchctl", "unload", str(sp["plist"])], quiet=True)
-        _run(["launchctl", "load", str(sp["plist"])])
-        typer.echo(f"installed {sp['plist']}\nstop: launchctl unload {sp['plist']}")
+        uid = os.getuid()
+        _run(["launchctl", "bootout", f"gui/{uid}/com.recipelib.server"], quiet=True)
+        if _run(["launchctl", "bootstrap", f"gui/{uid}", str(sp["plist"])]) != 0:
+            _run(["launchctl", "load", "-w", str(sp["plist"])])
+        typer.echo(f"installed {sp['plist']}\nstatus: recipes service status   stop: recipes service remove")
     elif sys.platform == "win32":
         launcher = sp["pythonw"] if sp["pythonw"].exists() else sp["exe"]
         tr = f'"{launcher}" -m recipelib.cli serve' if launcher == sp["pythonw"] else f'"{launcher}" serve'
@@ -334,6 +340,7 @@ def service_remove():
         _run(["systemctl", "--user", "daemon-reload"], quiet=True)
         typer.echo("removed the systemd user service")
     elif sys.platform == "darwin":
+        _run(["launchctl", "bootout", f"gui/{os.getuid()}/com.recipelib.server"], quiet=True)
         _run(["launchctl", "unload", str(sp["plist"])], quiet=True)
         if sp["plist"].exists():
             sp["plist"].unlink()

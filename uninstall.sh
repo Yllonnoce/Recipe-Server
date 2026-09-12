@@ -21,6 +21,7 @@ done
 say()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m!!  %s\033[0m\n' "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
+if [ "$(id -u)" = 0 ]; then warn "Run the uninstaller as yourself, not with sudo: ./uninstall.sh $*"; exit 1; fi
 
 # Paths before we delete anything. Honour RECIPELIB_CONFIG / RECIPELIB_LIBRARY_DIR
 # exactly as the app does, then the config file, then the defaults. Never guess

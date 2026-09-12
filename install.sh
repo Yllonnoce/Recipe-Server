@@ -30,6 +30,14 @@ say()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m!!  %s\033[0m\n' "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Must run as the user who will use it: the service is a per-user agent and the
+# library lives in that user's home. sudo is asked for only where needed.
+if [ "$(id -u)" = 0 ]; then
+  warn "Do not run the installer with sudo. Run it as yourself: ./install.sh $*"
+  warn "It asks for your password itself for the few steps that need it."
+  exit 1
+fi
+
 # ---------------------------------------------------------------- uv + python
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 if ! have uv; then

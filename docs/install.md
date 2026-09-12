@@ -6,7 +6,8 @@ model, and offers to install [Ollama](https://ollama.com) if it is missing.
 
 ## One-command install
 
-Linux / macOS (from the project folder):
+Linux / macOS (from the project folder, as your normal user, **not** with `sudo`; it asks
+for your password itself where needed):
 
 ```bash
 ./install.sh --service        # --service: start at login; --no-model to skip the 5 GB model
