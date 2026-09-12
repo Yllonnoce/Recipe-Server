@@ -41,5 +41,35 @@
       <a class="btn" href="{{ request.url_for('recipe_detail', recipe_id=r.id) }}">Cancel</a>
     </div>
   </form>
+  <form class="edit-form cover-form" id="cover" method="post" action="{{ request.url_for('recipe_cover', recipe_id=r.id) }}" enctype="multipart/form-data">
+    <h2>Photo</h2>
+    <p class="muted">The photo on the card and at the top of the recipe. Pick one found in the PDF, use a page as the picture, or upload your own.</p>
+    <div class="cover-grid">
+      <label class="cover-opt {{ 'current' if not r.cover_asset_id }}">
+        <input type="radio" name="choice" value="none"> 
+        <span class="thumb none">no photo<br><small>shows page 1</small></span>
+      </label>
+      {% for c in candidates %}
+      <label class="cover-opt">
+        <input type="radio" name="choice" value="xref:{{ c.xref }}">
+        <span class="thumb"><img src="{{ request.url_for('recipe_pdf_image', recipe_id=r.id, xref=c.xref) }}" alt="" loading="lazy"></span>
+        <small>p. {{ c.page + 1 }} · {{ c.width }}×{{ c.height }}</small>
+      </label>
+      {% endfor %}
+      {% for pno in preview_pages %}
+      <label class="cover-opt">
+        <input type="radio" name="choice" value="page:{{ pno }}">
+        <span class="thumb page"><img src="{{ request.url_for('recipe_page_image', recipe_id=r.id, page=pno) }}" alt="" loading="lazy"></span>
+        <small>page {{ pno + 1 }}</small>
+      </label>
+      {% endfor %}
+      <label class="cover-opt upload">
+        <input type="radio" name="choice" value="upload">
+        <span class="thumb none">upload…</span>
+        <input type="file" name="file" accept="image/*" onchange="this.closest('label').querySelector('input[type=radio]').checked = true">
+      </label>
+    </div>
+    <div class="actions"><button class="btn" type="submit">Use this photo</button></div>
+  </form>
 </div>
 {% endblock %}

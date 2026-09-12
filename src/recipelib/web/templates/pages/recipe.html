@@ -8,6 +8,7 @@
       {% if r.cover_asset_id %}<img src="{{ request.url_for('asset', asset_id=r.cover_asset_id) }}" alt="">
       {% elif r.thumb_asset_id %}<img class="page" src="{{ request.url_for('asset', asset_id=r.thumb_asset_id) }}" alt="">
       {% else %}<div class="placeholder">🍽</div>{% endif %}
+      <a class="change-photo" href="{{ request.url_for('recipe_edit', recipe_id=r.id) }}#cover" title="Change the photo">✎ photo</a>
     </div>
     <div class="head-text">
       <h1>{{ r.title }}</h1>

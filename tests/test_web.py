@@ -82,6 +82,27 @@ def test_upload_to_library(client, library, tmp_path):
     assert "Fluffy Pancakes" in client.get("/partials/cards", params={"q": "weekend"}).text
     assert "Fluffy Pancakes" in client.get("/partials/cards", params={"tag": "course:breakfast"}).text
 
+    # cover picker: page render, no photo, upload
+    assert client.get(f"/recipes/{rid}/page-image/0").headers["content-type"] == "image/png"
+    assert client.get(f"/recipes/{rid}/page-image/9").status_code == 404
+    assert "Photo" in client.get(f"/recipes/{rid}/edit").text
+    r = client.post(f"/recipes/{rid}/cover", data={"choice": "page:0"}, follow_redirects=False)
+    assert r.status_code == 303
+    with session_scope() as s:
+        rec = s.get(Recipe, rid)
+        assert rec.cover_asset_id is not None
+        cover_a = rec.cover_asset_id
+    import pymupdf
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 300, 200), False); pix.clear_with(90)
+    r = client.post(f"/recipes/{rid}/cover", data={"choice": "upload"}, files={"file": ("me.png", pix.tobytes("png"), "image/png")}, follow_redirects=False)
+    assert r.status_code == 303
+    with session_scope() as s:
+        rec = s.get(Recipe, rid)
+        assert rec.cover_asset_id is not None and rec.cover_asset_id != cover_a
+    client.post(f"/recipes/{rid}/cover", data={"choice": "none"}, follow_redirects=False)
+    with session_scope() as s:
+        assert s.get(Recipe, rid).cover_asset_id is None
+
     # favorite toggle (htmx) and duplicate upload
     assert "♥" in client.post(f"/recipes/{rid}/favorite", headers={"HX-Request": "true"}).text
     with pdf.open("rb") as fh:

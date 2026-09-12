@@ -253,28 +253,11 @@ def stage_thumbnail(ctx: Ctx):
         cover, _w, _h = pdfops.resize_png(cover, pdfops.COVER_WIDTH)
     with session_scope() as s:
         r = s.get(Recipe, ctx.recipe_id)
-        r.thumb_asset_id = _store_image(s, cfg, thumb, "thumb").id
-        if cover is not None:
-            r.cover_asset_id = _store_image(s, cfg, cover, "cover").id
+        r.thumb_asset_id = R.store_image(s, thumb, "thumb").id
+        # a cover the user picked by hand (re-extract) is kept
+        if cover is not None and not (ctx.force and r.cover_asset_id):
+            r.cover_asset_id = R.store_image(s, cover, "cover").id
     return False
-
-
-def _store_image(s, cfg, png: bytes, kind: str) -> Asset:
-    sha = pdfops.sha256_bytes(png)
-    a = s.scalar(select(Asset).where(Asset.sha256 == sha, Asset.kind == kind))
-    if a is not None:
-        return a
-    rel = Path(kind) / sha[:2] / f"{sha}.png"
-    dest = cfg.assets_dir / rel
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(png)
-    import pymupdf
-    pix = pymupdf.Pixmap(png)
-    a = Asset(kind=kind, rel_path=rel.as_posix(), sha256=sha, bytes=len(png), mime="image/png",
-              width=pix.width, height=pix.height)
-    s.add(a)
-    s.flush()
-    return a
 
 
 _URL_IN_TEXT = re.compile(r"https?://[^\s<>\"']{8,}", re.I)

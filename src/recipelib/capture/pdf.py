@@ -57,6 +57,17 @@ def render_page_png(path: Path, page_index: int, width: int) -> bytes:
         return pix.tobytes("png")
 
 
+def render_page_top_png(path: Path, page_index: int, width: int, aspect: float = 0.75) -> bytes:
+    """The top of a page cropped to a landscape photo shape (for page-as-cover)."""
+    with pymupdf.open(path) as doc:
+        page = doc[page_index]
+        pw, ph = page.rect.width, page.rect.height
+        clip = pymupdf.Rect(0, 0, pw, min(ph, pw * aspect))
+        zoom = width / pw
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), clip=clip, alpha=False)
+        return pix.tobytes("png")
+
+
 def render_page_pixmap_bytes(path: Path, page_index: int, dpi: int = 200) -> tuple[bytes, int, int]:
     """PNG bytes of a page at the given dpi (for OCR)."""
     with pymupdf.open(path) as doc:
@@ -65,30 +76,61 @@ def render_page_pixmap_bytes(path: Path, page_index: int, dpi: int = 200) -> tup
         return pix.tobytes("png"), pix.width, pix.height
 
 
-def largest_image_on_page(path: Path, page_index: int = 0, min_px: int = 300) -> bytes | None:
-    """The biggest embedded image on a page, as PNG, or None if nothing sizable."""
+def candidate_images(path: Path, max_pages: int = 3, min_px: int = 200) -> list[dict]:
+    """Photos embedded in the first pages, best cover candidate first.
+
+    Ranked by the area the image occupies *on the page* (a hero photo beats a
+    high-resolution but tiny thumbnail), with banner/strip shapes and tiny
+    images dropped. Each entry: page, xref, width, height, area."""
+    out: list[dict] = []
     with pymupdf.open(path) as doc:
-        page = doc[page_index]
-        best = None
-        for info in page.get_images(full=True):
-            xref = info[0]
-            try:
-                pix = pymupdf.Pixmap(doc, xref)
-            except Exception:
-                continue
-            if pix.width < min_px or pix.height < min_px:
-                continue
-            area = pix.width * pix.height
-            if best is None or area > best[0]:
-                best = (area, xref)
-        if best is None:
+        seen: set[int] = set()
+        for pno in range(min(max_pages, doc.page_count)):
+            page = doc[pno]
+            for info in page.get_images(full=True):
+                xref = info[0]
+                if xref in seen:
+                    continue
+                w, h = info[2], info[3]
+                if w < min_px or h < min_px:
+                    continue
+                ratio = w / h
+                if ratio > 2.6 or ratio < 0.4:          # banners, ads, side strips
+                    continue
+                rects = page.get_image_rects(xref)
+                if not rects:
+                    continue
+                shown = max(r.width * r.height for r in rects)
+                if shown < 40 * 40:
+                    continue
+                seen.add(xref)
+                # earlier pages win ties; page 1 gets a bonus so a hero shot on
+                # the first page beats a bigger photo further down
+                out.append({"page": pno, "xref": xref, "width": w, "height": h,
+                            "area": shown * (1.3 if pno == 0 else 1.0)})
+    out.sort(key=lambda d: -d["area"])
+    return out
+
+
+def image_png(path: Path, xref: int) -> bytes | None:
+    with pymupdf.open(path) as doc:
+        try:
+            pix = pymupdf.Pixmap(doc, xref)
+        except Exception:
             return None
-        pix = pymupdf.Pixmap(doc, best[1])
         if pix.n - pix.alpha >= 4:          # CMYK etc -> RGB
             pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
         if pix.alpha:
             pix = pymupdf.Pixmap(pix, 0)
         return pix.tobytes("png")
+
+
+def largest_image_on_page(path: Path, page_index: int = 0, min_px: int = 300) -> bytes | None:
+    """Best cover candidate from the first page (kept for the pipeline)."""
+    cands = [c for c in candidate_images(path, max_pages=1, min_px=min_px) if c["page"] == page_index]
+    if not cands:
+        return None
+    return image_png(path, cands[0]["xref"])
 
 
 def resize_png(png: bytes, width: int) -> tuple[bytes, int, int]:

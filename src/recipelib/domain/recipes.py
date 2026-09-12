@@ -234,6 +234,45 @@ def set_text(s: Session, r: Recipe, page_texts: list[str], source: str) -> None:
         r.text.page_texts = json.dumps(page_texts)
 
 
+# ---- images ----------------------------------------------------------------
+
+def store_image(s: Session, png: bytes, kind: str):
+    """Save PNG bytes under assets/<kind>/<sha>.png (deduplicated) and return the Asset."""
+    from pathlib import Path
+
+    import pymupdf
+
+    from ..capture.pdf import sha256_bytes
+    from ..config import get_settings
+    from ..db.models import Asset
+    cfg = get_settings()
+    sha = sha256_bytes(png)
+    a = s.scalar(select(Asset).where(Asset.sha256 == sha, Asset.kind == kind))
+    if a is not None:
+        return a
+    rel = Path(kind) / sha[:2] / f"{sha}.png"
+    dest = cfg.assets_dir / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(png)
+    pix = pymupdf.Pixmap(png)
+    a = Asset(kind=kind, rel_path=rel.as_posix(), sha256=sha, bytes=len(png), mime="image/png",
+              width=pix.width, height=pix.height)
+    s.add(a)
+    s.flush()
+    return a
+
+
+def set_cover_from_png(s: Session, r: Recipe, png: bytes | None) -> None:
+    """png=None clears the cover (the page thumbnail is shown instead)."""
+    if png is None:
+        r.cover_asset_id = None
+    else:
+        from ..capture.pdf import COVER_WIDTH, resize_png
+        png, _w, _h = resize_png(png, COVER_WIDTH)
+        r.cover_asset_id = store_image(s, png, "cover").id
+    r.updated_at = utcnow()
+
+
 # ---- reader state ----------------------------------------------------------
 
 def clamp_page(r: Recipe, value) -> int:

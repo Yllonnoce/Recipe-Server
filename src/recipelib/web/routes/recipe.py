@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from ...capture.queue import get_queue
@@ -31,11 +31,24 @@ def detail(recipe_id: int, request: Request, s: Session = Depends(get_db)):
     })
 
 
+def _pdf_path(r):
+    from ...config import get_settings
+    if r.pdf_asset is None:
+        return None
+    p = get_settings().assets_dir / r.pdf_asset.rel_path
+    return p if p.is_file() else None
+
+
 @router.get("/{recipe_id}/edit", name="recipe_edit")
 def edit(recipe_id: int, request: Request, s: Session = Depends(get_db)):
+    from ...capture import pdf as pdfops
     r = _get(s, recipe_id)
+    pdf = _pdf_path(r)
+    candidates = pdfops.candidate_images(pdf, max_pages=3)[:12] if pdf else []
+    n_pages = min(r.page_count or 1, 3)
     return templates.TemplateResponse(request, "pages/edit.html", {
         "r": r, "ingredients_text": R.ingredients_as_text(r), "steps_text": R.steps_as_text(r),
+        "candidates": candidates, "preview_pages": list(range(n_pages)),
         "course": ", ".join(t.name for t in r.tags_of("course")),
         "cuisine": ", ".join(t.name for t in r.tags_of("cuisine")),
         "custom": ", ".join(t.name for t in r.tags_of("custom")),
@@ -108,4 +121,71 @@ def reextract(recipe_id: int, request: Request, s: Session = Depends(get_db)):
     if j is not None:
         j.recipe_id = r.id
         s.commit()
+    return RedirectResponse(request.url_for("recipe_detail", recipe_id=r.id), status_code=303)
+
+
+# ---- cover photo -----------------------------------------------------------
+
+@router.get("/{recipe_id}/pdf-image/{xref}", name="recipe_pdf_image")
+def pdf_image(recipe_id: int, xref: int, s: Session = Depends(get_db)):
+    """An image embedded in the recipe's PDF, for the cover picker."""
+    from ...capture import pdf as pdfops
+    r = _get(s, recipe_id)
+    pdf = _pdf_path(r)
+    png = pdfops.image_png(pdf, xref) if pdf else None
+    if png is None:
+        raise HTTPException(404)
+    png, _w, _h = pdfops.resize_png(png, 480)
+    return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.get("/{recipe_id}/page-image/{page}", name="recipe_page_image")
+def page_image(recipe_id: int, page: int, s: Session = Depends(get_db)):
+    from ...capture import pdf as pdfops
+    r = _get(s, recipe_id)
+    pdf = _pdf_path(r)
+    if pdf is None or page < 0 or page >= (r.page_count or 1):
+        raise HTTPException(404)
+    png = pdfops.render_page_png(pdf, page, 480)
+    return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.post("/{recipe_id}/cover", name="recipe_cover")
+async def set_cover(recipe_id: int, request: Request, choice: str = Form("keep"),
+                    file: UploadFile | None = File(None), s: Session = Depends(get_db)):
+    """choice: xref:<n> (image from the PDF), page:<n> (rendered page), upload, none, keep."""
+    from ...capture import pdf as pdfops
+    r = _get(s, recipe_id)
+    pdf = _pdf_path(r)
+    png: bytes | None = None
+    if choice == "upload":
+        data = await file.read() if file is not None else b""
+        if not data:
+            raise HTTPException(400, "choose an image file to upload")
+        import io
+
+        from PIL import Image
+        try:
+            im = Image.open(io.BytesIO(data)).convert("RGB")
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(400, f"not an image: {e}") from e
+        im.thumbnail((1600, 1600))
+        buf = io.BytesIO()
+        im.save(buf, format="PNG")
+        png = buf.getvalue()
+    elif choice.startswith("xref:") and pdf:
+        png = pdfops.image_png(pdf, int(choice[5:]))
+        if png is None:
+            raise HTTPException(404, "image not found in the PDF")
+    elif choice.startswith("page:") and pdf:
+        page = int(choice[5:])
+        if page < 0 or page >= (r.page_count or 1):
+            raise HTTPException(404)
+        png = pdfops.render_page_top_png(pdf, page, 800)
+    elif choice == "none":
+        png = None
+    else:
+        return RedirectResponse(request.url_for("recipe_edit", recipe_id=r.id), status_code=303)
+    R.set_cover_from_png(s, r, png)
+    s.commit()
     return RedirectResponse(request.url_for("recipe_detail", recipe_id=r.id), status_code=303)
