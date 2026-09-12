@@ -225,3 +225,12 @@ header.top nav .fs { background: none; border: 1px solid var(--line); border-rad
 header.top nav .fs:hover, header.top nav .fs.on { color: var(--ink); border-color: var(--muted); }
 :fullscreen header.top { position: static; }
 @media (display-mode: standalone), (display-mode: fullscreen) { header.top nav .fs { display: none; } }
+
+/* collapsible sidebar sections */
+details.facet > summary { list-style: none; cursor: pointer; user-select: none; display: flex; align-items: center; }
+details.facet > summary::-webkit-details-marker { display: none; }
+details.facet > summary h4 { margin: 16px 0 6px; display: flex; align-items: center; gap: 6px; flex: 1; }
+details.facet > summary h4::before { content: "▸"; font-size: .9em; transition: transform .15s; }
+details.facet[open] > summary h4::before { transform: rotate(90deg); }
+details.facet > summary h4 .sel { text-transform: none; letter-spacing: 0; color: var(--accent); font-weight: 600; }
+@media (max-width: 900px) { details.facet { width: 100%; } }
