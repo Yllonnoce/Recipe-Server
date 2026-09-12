@@ -29,6 +29,7 @@
 <div id="timers"></div>
 <video id="keepawake" loop muted playsinline hidden></video>
 <script id="recipe-data" type="application/json">{{ data | tojson }}</script>
+<script src="{{ request.url_for('static', path='scale.js') }}"></script>
 <script src="{{ request.url_for('static', path='cook.js') }}"></script>
 </body>
 </html>

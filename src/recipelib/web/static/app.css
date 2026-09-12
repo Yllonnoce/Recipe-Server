@@ -184,3 +184,12 @@ dialog::backdrop { background: rgba(0,0,0,.4); }
 .picker label { display: flex; gap: 8px; align-items: center; padding: 6px 8px; margin: 0; font-weight: 400; border-bottom: 1px solid var(--line); cursor: pointer; }
 .picker label input { width: auto; margin: 0; }
 @media (max-width: 900px) { .week { grid-template-columns: 1fr; } .day { min-height: 0; } }
+
+/* servings stepper on the recipe page */
+.scaler { display: inline-flex; align-items: center; gap: 4px; }
+.scaler button { font: inherit; font-size: .85em; line-height: 1; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+.scaler button:hover { border-color: var(--muted); }
+.scaler .srv { font-weight: 600; color: var(--ink); min-width: 5.5em; text-align: center; }
+.scaler .reset { display: none; font-size: .75em; color: var(--accent); border-color: transparent; background: none; }
+.scaler.scaled .reset { display: inline-block; }
+.scaler.scaled .srv { color: var(--accent); }

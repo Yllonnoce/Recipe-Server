@@ -8,24 +8,7 @@
   const $ = (id) => document.getElementById(id);
   const base = data.servings || null;
 
-  const GLYPH = { '1/2': '½', '1/3': '⅓', '2/3': '⅔', '1/4': '¼', '3/4': '¾', '1/8': '⅛', '3/8': '⅜', '5/8': '⅝', '7/8': '⅞' };
-  function fmt(q, unit) {
-    if (q == null) return '';
-    const metric = unit && ['g', 'kg', 'ml', 'l'].indexOf(unit) !== -1;
-    if (metric) return (Math.round(q * 10) / 10).toString();
-    const whole = Math.floor(q + 1e-9);
-    let rem = q - whole;
-    if (rem < 0.04) return String(whole);
-    // nearest eighth
-    let best = null, bestErr = 1;
-    [[1, 8], [1, 4], [1, 3], [3, 8], [1, 2], [5, 8], [2, 3], [3, 4], [7, 8]].forEach(([n, d]) => {
-      const err = Math.abs(rem - n / d);
-      if (err < bestErr) { bestErr = err; best = n + '/' + d; }
-    });
-    if (bestErr > 0.06) return (Math.round(q * 100) / 100).toString();
-    const g = GLYPH[best] || best;
-    return whole ? whole + ' ' + g : g;
-  }
+  const fmt = window.rlFmt;
 
   function servingsLabel() {
     if (base) {
