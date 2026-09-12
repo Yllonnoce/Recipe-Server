@@ -23,12 +23,12 @@ search, read, cook, plan meals and build a shopping list from any browser.
 ## Quick start
 
 ```bash
-uv venv --python 3.12 .venv && source .venv/bin/activate
-pip install -e ".[ocr]"
-playwright install chromium
-ollama pull qwen3:8b
-recipes init && recipes doctor && recipes serve
+./install.sh --service            # Linux / macOS
+.\install.ps1 -Service -Firewall  # Windows (PowerShell)
 ```
+
+The installer fetches its own Python, the app, the browser and the model, then starts
+the server at login. Manual steps are in the docs.
 
 Open `http://<this-machine>:8000`. See [docs/install.md](docs/install.md),
 [docs/printer.md](docs/printer.md) and [docs/devices.md](docs/devices.md).

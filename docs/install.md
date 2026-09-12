@@ -1,7 +1,33 @@
 # Installing Recipe Library
 
-Works the same on Linux, Windows and macOS. You need Python 3.11–3.13 (3.12 recommended)
-and, for the local recipe extraction, [Ollama](https://ollama.com).
+Works the same on Linux, Windows and macOS. Nothing needs to be installed beforehand:
+the installer fetches its own Python 3.12, the app, the headless browser and the local
+model, and offers to install [Ollama](https://ollama.com) if it is missing.
+
+## One-command install
+
+Linux / macOS (from the project folder):
+
+```bash
+./install.sh --service        # --service: start at login; --no-model to skip the 5 GB model
+```
+
+Windows (PowerShell, from the project folder):
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # once, if scripts are blocked
+.\install.ps1 -Service -Firewall
+```
+
+`-Firewall` adds the Windows Firewall rules other devices need (asks for admin). On Linux
+the installer opens the ports in ufw when ufw is active; on macOS the built-in firewall
+prompts the first time the server starts.
+
+Re-running the installer is safe: it upgrades the app in place and keeps your library.
+
+## Manual install
+
+If you'd rather do it by hand:
 
 ```bash
 # 1. get the code and a virtual environment
@@ -46,8 +72,15 @@ Every config key can be overridden with an environment variable: `RECIPELIB_PORT
 
 ## Running at boot
 
-`recipes service-template systemd`, `launchd` or `windows-task` prints a ready-to-use
-service definition with the right paths for this machine.
+`./install.sh --service` (Linux: systemd user unit, macOS: launchd agent) and
+`.\install.ps1 -Service` (Windows: Task Scheduler at login) set this up. To do it by
+hand, `recipes service-template systemd`, `launchd` or `windows-task` prints a ready-to-use
+definition with the right paths for this machine.
+
+To remove: Linux `systemctl --user disable --now recipelib`; macOS
+`launchctl unload ~/Library/LaunchAgents/com.recipelib.server.plist`; Windows
+`Unregister-ScheduledTask -TaskName "Recipe Library"`. Deleting the `.venv` folder removes
+the app; your recipes stay in `~/RecipeLibrary`.
 
 ## Backups
 
