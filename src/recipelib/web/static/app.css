@@ -224,3 +224,4 @@ fieldset.cats label.check { margin: 0; font-size: .9em; }
 header.top nav .fs { background: none; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); cursor: pointer; font: inherit; padding: 2px 8px; line-height: 1.2; }
 header.top nav .fs:hover, header.top nav .fs.on { color: var(--ink); border-color: var(--muted); }
 :fullscreen header.top { position: static; }
+@media (display-mode: standalone), (display-mode: fullscreen) { header.top nav .fs { display: none; } }

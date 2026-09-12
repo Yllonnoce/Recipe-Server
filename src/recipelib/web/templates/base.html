@@ -5,8 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Recipe Library{% endblock %}</title>
 <link rel="stylesheet" href="{{ request.url_for('static', path='app.css') }}">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="theme-color" content="#c8542a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Recipes">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍲</text></svg>">
 <script src="{{ request.url_for('static', path='vendor/htmx.min.js') }}"></script>
+<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
 {% block head %}{% endblock %}
 </head>
 <body>
@@ -18,7 +26,7 @@
     <a href="{{ request.url_for('shopping') }}">Shopping</a>
     <a href="{{ request.url_for('plan') }}">Plan</a>
     <a href="{{ request.url_for('settings') }}">Settings</a>
-    <button class="fs" type="button" id="fsBtn" title="Full screen (F11 also works)">&#x26F6;</button>
+    <button class="fs" type="button" id="fsBtn" title="Full screen for this page. For full screen that stays on, add the app to your home screen.">&#x26F6;</button>
   </nav>
 </header>
 <main class="wrap">

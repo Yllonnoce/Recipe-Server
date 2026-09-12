@@ -149,6 +149,14 @@ def test_inbox_watch_and_image_upload(client, library, tmp_path):
     assert client.get("/partials/jobs").text.count("done") >= 2
 
 
+def test_pwa_files(client):
+    assert client.get("/sw.js").headers["content-type"].startswith("application/javascript")
+    m = client.get("/static/manifest.webmanifest")
+    assert m.status_code == 200 and "Recipe Library" in m.text
+    assert client.get("/static/icons/icon-512.png").headers["content-type"] == "image/png"
+    assert 'rel="manifest"' in client.get("/").text
+
+
 def test_settings_and_capture_pages(client):
     assert client.get("/capture").status_code == 200
     assert client.get("/settings").status_code == 200

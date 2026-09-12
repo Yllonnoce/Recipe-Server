@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="theme-color" content="#c8542a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Recipes">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
 <title>Cook: {{ r.title }}</title>
 <link rel="stylesheet" href="{{ request.url_for('static', path='app.css') }}">
 <link rel="stylesheet" href="{{ request.url_for('static', path='cook.css') }}">
@@ -32,5 +39,6 @@
 <script id="recipe-data" type="application/json">{{ data | tojson }}</script>
 <script src="{{ request.url_for('static', path='scale.js') }}"></script>
 <script src="{{ request.url_for('static', path='cook.js') }}"></script>
+<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
 </body>
 </html>

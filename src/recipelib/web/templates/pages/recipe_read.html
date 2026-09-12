@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="theme-color" content="#c8542a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Recipes">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
 <title>{{ r.title }} — Recipe Library</title>
 <style>
   /* Standalone full-viewport reader (no site chrome — the book IS the page). */
@@ -142,5 +149,6 @@
     defaultLayout: "{{ 'scroll' if embed else '' }}" || null,
   });
 </script>
+<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
 </body>
 </html>

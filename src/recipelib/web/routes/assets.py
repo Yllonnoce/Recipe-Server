@@ -11,6 +11,21 @@ from ...db.engine import get_db
 from ...db.models import Asset
 
 router = APIRouter()
+_STATIC = None
+
+
+def _static_dir():
+    global _STATIC
+    if _STATIC is None:
+        from importlib import resources
+        _STATIC = resources.files("recipelib.web") / "static"
+    return _STATIC
+
+
+@router.get("/sw.js", include_in_schema=False)
+def service_worker():
+    return FileResponse(str(_static_dir() / "sw.js"), media_type="application/javascript",
+                        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
 _REL = re.compile(r"^(thumb|cover|page_image)/[0-9a-f]{2}/[0-9a-f]{64}\.(png|jpg)$")
 
 
