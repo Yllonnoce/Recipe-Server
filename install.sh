@@ -131,24 +131,8 @@ fi
 
 # ---------------------------------------------------------------- service
 if [ "$SERVICE" = 1 ]; then
-  if [ "$OS" = "Linux" ]; then
-    say "Installing a systemd user service (starts at login, survives logout)"
-    mkdir -p "$HOME/.config/systemd/user"
-    "$HERE/.venv/bin/recipes" service-template systemd | sed '/^#/d' > "$HOME/.config/systemd/user/recipelib.service"
-    systemctl --user daemon-reload
-    systemctl --user enable --now recipelib
-    loginctl enable-linger "$USER" 2>/dev/null || warn "run 'sudo loginctl enable-linger $USER' so it keeps running after logout"
-    echo "    status:  systemctl --user status recipelib"
-    echo "    logs:    journalctl --user -u recipelib -f"
-  else
-    say "Installing a launchd agent (starts at login)"
-    mkdir -p "$HOME/Library/LaunchAgents"
-    PLIST="$HOME/Library/LaunchAgents/com.recipelib.server.plist"
-    "$HERE/.venv/bin/recipes" service-template launchd | sed '/^<!--/d' > "$PLIST"
-    launchctl unload "$PLIST" 2>/dev/null || true
-    launchctl load "$PLIST"
-    echo "    stop:    launchctl unload $PLIST"
-  fi
+  say "Installing the background service (starts at login)"
+  "$HERE/.venv/bin/recipes" service install
 fi
 
 # ---------------------------------------------------------------- done

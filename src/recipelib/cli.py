@@ -244,6 +244,142 @@ def config_set(key: str, value: str):
     typer.echo(line)
 
 
+service_cli = typer.Typer(help="Run the server as a background service that starts at login.")
+cli.add_typer(service_cli, name="service")
+
+
+def _service_paths() -> dict:
+    exe = Path(sys.executable).parent / ("recipes.exe" if sys.platform == "win32" else "recipes")
+    return {
+        "exe": exe,
+        "pythonw": Path(sys.executable).parent / "pythonw.exe",
+        "unit": Path.home() / ".config/systemd/user/recipelib.service",
+        "plist": Path.home() / "Library/LaunchAgents/com.recipelib.server.plist",
+        "task": "Recipe Library",
+    }
+
+
+def _run(cmd: list[str], quiet: bool = False) -> int:
+    import subprocess
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if not quiet and (r.stdout or r.stderr).strip():
+        typer.echo((r.stdout + r.stderr).strip())
+    return r.returncode
+
+
+@service_cli.command("install")
+def service_install():
+    """Install and start the service (systemd user unit / launchd agent / Task Scheduler)."""
+    import subprocess
+    sp = _service_paths()
+    if sys.platform.startswith("linux"):
+        import shutil
+        if not shutil.which("systemctl"):
+            raise typer.Exit("systemd not found; run `recipes serve` from your own service manager")
+        sp["unit"].parent.mkdir(parents=True, exist_ok=True)
+        sp["unit"].write_text(f"""[Unit]
+Description=Recipe Library
+After=network-online.target
+
+[Service]
+ExecStart={sp['exe']} serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+""")
+        _run(["systemctl", "--user", "daemon-reload"])
+        _run(["systemctl", "--user", "enable", "--now", "recipelib"])
+        import os
+        if _run(["loginctl", "enable-linger", os.environ.get("USER", "")], quiet=True) != 0:
+            typer.echo("note: run `sudo loginctl enable-linger $USER` so the service keeps running after you log out")
+        typer.echo(f"installed {sp['unit']}\nstatus: systemctl --user status recipelib   logs: journalctl --user -u recipelib -f")
+    elif sys.platform == "darwin":
+        sp["plist"].parent.mkdir(parents=True, exist_ok=True)
+        sp["plist"].write_text(f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.recipelib.server</string>
+  <key>ProgramArguments</key><array><string>{sp['exe']}</string><string>serve</string></array>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>{Path.home() / 'RecipeLibrary/logs/launchd.log'}</string>
+  <key>StandardErrorPath</key><string>{Path.home() / 'RecipeLibrary/logs/launchd.log'}</string>
+</dict></plist>
+""")
+        _run(["launchctl", "unload", str(sp["plist"])], quiet=True)
+        _run(["launchctl", "load", str(sp["plist"])])
+        typer.echo(f"installed {sp['plist']}\nstop: launchctl unload {sp['plist']}")
+    elif sys.platform == "win32":
+        launcher = sp["pythonw"] if sp["pythonw"].exists() else sp["exe"]
+        tr = f'"{launcher}" -m recipelib.cli serve' if launcher == sp["pythonw"] else f'"{launcher}" serve'
+        _run(["schtasks", "/Delete", "/TN", sp["task"], "/F"], quiet=True)
+        rc = _run(["schtasks", "/Create", "/TN", sp["task"], "/SC", "ONLOGON", "/RL", "LIMITED", "/F", "/TR", tr])
+        if rc != 0:
+            raise typer.Exit(code=rc)
+        _run(["schtasks", "/Run", "/TN", sp["task"]], quiet=True)
+        typer.echo(f"installed scheduled task '{sp['task']}' (starts at login, no window)")
+    else:
+        raise typer.Exit("unsupported platform")
+
+
+@service_cli.command("remove")
+def service_remove():
+    """Stop and remove the service. The app and your recipes stay."""
+    sp = _service_paths()
+    if sys.platform.startswith("linux"):
+        _run(["systemctl", "--user", "disable", "--now", "recipelib"], quiet=True)
+        if sp["unit"].exists():
+            sp["unit"].unlink()
+        _run(["systemctl", "--user", "daemon-reload"], quiet=True)
+        typer.echo("removed the systemd user service")
+    elif sys.platform == "darwin":
+        _run(["launchctl", "unload", str(sp["plist"])], quiet=True)
+        if sp["plist"].exists():
+            sp["plist"].unlink()
+        typer.echo("removed the launchd agent")
+    elif sys.platform == "win32":
+        _run(["schtasks", "/End", "/TN", sp["task"]], quiet=True)
+        _run(["schtasks", "/Delete", "/TN", sp["task"], "/F"], quiet=True)
+        typer.echo("removed the scheduled task")
+
+
+@service_cli.command("status")
+def service_status():
+    """Is the service installed and running?"""
+    sp = _service_paths()
+    if sys.platform.startswith("linux"):
+        if not sp["unit"].exists():
+            typer.echo("not installed (recipes service install)")
+            raise typer.Exit(code=1)
+        _run(["systemctl", "--user", "--no-pager", "status", "recipelib"])
+    elif sys.platform == "darwin":
+        typer.echo("installed" if sp["plist"].exists() else "not installed (recipes service install)")
+        _run(["launchctl", "list", "com.recipelib.server"])
+    elif sys.platform == "win32":
+        _run(["schtasks", "/Query", "/TN", sp["task"], "/FO", "LIST"])
+
+
+@service_cli.command("restart")
+def service_restart():
+    """Restart the running service."""
+    _restart_service()
+
+
+@service_cli.command("logs")
+def service_logs(lines: int = 50):
+    """Show the last lines of the server log."""
+    cfg = get_settings()
+    log = cfg.logs_dir / "recipelib.log"
+    if not log.exists():
+        typer.echo(f"no log yet at {log}")
+        return
+    from collections import deque
+    with log.open(encoding="utf-8", errors="replace") as fh:
+        for ln in deque(fh, maxlen=lines):
+            typer.echo(ln.rstrip())
+
+
 @cli.command("service-template")
 def service_template(kind: str = typer.Argument(..., help="systemd | launchd | windows-task | nginx | avahi")):
     """Print a service definition for this machine's paths."""

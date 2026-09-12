@@ -36,20 +36,16 @@ elif [ -x "$HERE/.venv/bin/python" ]; then LIB="$("$HERE/.venv/bin/python" -c 'f
 fi
 
 # ---------------------------------------------------------------- service
-if [ "$OS" = "Linux" ]; then
-  if [ -f "$HOME/.config/systemd/user/recipelib.service" ]; then
-    say "Stopping and removing the systemd user service"
-    systemctl --user disable --now recipelib 2>/dev/null || true
-    rm -f "$HOME/.config/systemd/user/recipelib.service"
-    systemctl --user daemon-reload 2>/dev/null || true
-  fi
-else
-  PLIST="$HOME/Library/LaunchAgents/com.recipelib.server.plist"
-  if [ -f "$PLIST" ]; then
-    say "Unloading and removing the launchd agent"
-    launchctl unload "$PLIST" 2>/dev/null || true
-    rm -f "$PLIST"
-  fi
+if [ -x "$HERE/.venv/bin/recipes" ]; then
+  "$HERE/.venv/bin/recipes" service remove 2>/dev/null || true
+fi
+if [ "$OS" = "Linux" ] && [ -f "$HOME/.config/systemd/user/recipelib.service" ]; then
+  systemctl --user disable --now recipelib 2>/dev/null || true
+  rm -f "$HOME/.config/systemd/user/recipelib.service"; systemctl --user daemon-reload 2>/dev/null || true
+fi
+if [ "$OS" = "Darwin" ] && [ -f "$HOME/Library/LaunchAgents/com.recipelib.server.plist" ]; then
+  launchctl unload "$HOME/Library/LaunchAgents/com.recipelib.server.plist" 2>/dev/null || true
+  rm -f "$HOME/Library/LaunchAgents/com.recipelib.server.plist"
 fi
 # anything still running from a terminal
 pkill -f "\.venv/bin/recipes serve" 2>/dev/null && say "Stopped a running server" || true

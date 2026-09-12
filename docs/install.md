@@ -109,10 +109,17 @@ message and nothing else changes.
 
 ## Running at boot
 
-`./install.sh --service` (Linux: systemd user unit, macOS: launchd agent) and
-`install.bat /service` (Windows: Task Scheduler at login, no window) set this up. To do it by
-hand, `recipes service-template systemd`, `launchd` or `windows-task` prints a ready-to-use
-definition with the right paths for this machine.
+```bash
+recipes service install     # systemd user unit (Linux), launchd agent (macOS), Task Scheduler (Windows)
+recipes service status
+recipes service restart
+recipes service logs
+recipes service remove
+```
+
+`./install.sh --service` and `install.bat /service` run `recipes service install` for you.
+`recipes service-template systemd|launchd|windows-task` prints the definition if you want to
+place it yourself (for example as a system-wide unit).
 
 To remove: Linux `systemctl --user disable --now recipelib`; macOS
 `launchctl unload ~/Library/LaunchAgents/com.recipelib.server.plist`; Windows

@@ -113,11 +113,8 @@ if "%FIREWALL%"=="1" (
 
 if "%SERVICE%"=="1" (
   echo.
-  echo ==^> Registering a Task Scheduler job that starts the server at login ^(no window^)
-  schtasks /Delete /TN "Recipe Library" /F >nul 2>&1
-  schtasks /Create /TN "Recipe Library" /SC ONLOGON /RL LIMITED /F /TR "\"%HERE%\.venv\Scripts\pythonw.exe\" -m recipelib.cli serve"
-  schtasks /Run /TN "Recipe Library" >nul
-  echo     stop:    schtasks /End /TN "Recipe Library"    ^(or the Task Scheduler app^)
+  echo ==^> Installing the background service ^(starts at login, no window^)
+  "%RECIPES%" service install
 )
 
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do if not defined IP set "IP=%%a"
