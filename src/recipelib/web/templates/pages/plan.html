@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Meal plan — Recipe Library{% endblock %}
+{% block content %}
+<div class="plan-head">
+  <h1>Week of {{ start.strftime('%b %-d') }}</h1>
+  <a class="btn" href="{{ request.url_for('plan') }}?week={{ prev.isoformat() }}">‹ Prev</a>
+  <a class="btn" href="{{ request.url_for('plan') }}">Today</a>
+  <a class="btn" href="{{ request.url_for('plan') }}?week={{ next.isoformat() }}">Next ›</a>
+  <form method="post" action="{{ request.url_for('plan_shopping') }}"><input type="hidden" name="week" value="{{ start.isoformat() }}"><button class="btn primary">🛒 Shopping list for this week</button></form>
+</div>
+{% if message %}<div class="banner info">{{ message }}</div>{% endif %}
+<div class="week">
+  {% for d, entries in days.items() %}
+  <div class="day {{ 'today' if d == today }}">
+    <h3><span>{{ d.strftime('%A') }}</span><span class="d">{{ d.strftime('%b %-d') }}</span></h3>
+    {% for e in entries %}
+    <div class="entry">
+      <span class="slot">{{ e.slot }}</span>
+      {% if e.recipe %}<a href="{{ request.url_for('recipe_detail', recipe_id=e.recipe.id) }}">{{ e.recipe.title }}</a>{% if e.servings_override %} <span class="muted">×{{ e.servings_override|int if e.servings_override == e.servings_override|int else e.servings_override }}</span>{% endif %}
+      {% else %}{{ e.note }}{% endif %}
+      <form method="post" action="{{ request.url_for('plan_delete', entry_id=e.id) }}"><button class="x" title="Remove">×</button></form>
+    </div>
+    {% endfor %}
+    <button class="addbtn" type="button" data-date="{{ d.isoformat() }}">+ add</button>
+  </div>
+  {% endfor %}
+</div>
+
+<dialog id="addDlg">
+  <form method="post" action="{{ request.url_for('plan_add') }}">
+    <h2 style="margin-top:0">Add to <span id="dlgDay"></span></h2>
+    <input type="hidden" name="date" id="dlgDate">
+    <label>Meal <select name="slot">{% for sl in slots %}<option value="{{ sl }}" {{ 'selected' if sl == 'dinner' }}>{{ sl }}</option>{% endfor %}</select></label>
+    <label>Recipe <input type="search" id="pickQ" placeholder="search the library…" autocomplete="off"
+      hx-get="{{ request.url_for('recipe_picker') }}" hx-trigger="input changed delay:250ms, load" hx-target="#picker" name="q"></label>
+    <div class="picker" id="picker"></div>
+    <label>Servings <small>(optional)</small> <input name="servings" type="number" step="0.5" min="0.5"></label>
+    <label>…or a note <input name="note" placeholder="leftovers, eating out"></label>
+    <div class="actions"><button class="btn primary" type="submit">Add</button><button class="btn" type="button" id="dlgClose">Cancel</button></div>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script>
+const dlg = document.getElementById('addDlg');
+document.querySelectorAll('.addbtn').forEach(b => b.addEventListener('click', () => {
+  document.getElementById('dlgDate').value = b.dataset.date;
+  document.getElementById('dlgDay').textContent = b.closest('.day').querySelector('h3 span').textContent + ' ' + b.closest('.day').querySelector('h3 .d').textContent;
+  dlg.showModal(); document.getElementById('pickQ').focus();
+}));
+document.getElementById('dlgClose').addEventListener('click', () => dlg.close());
+</script>
+{% endblock %}

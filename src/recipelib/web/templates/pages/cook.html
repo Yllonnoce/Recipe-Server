@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cook: {{ r.title }}</title>
+<link rel="stylesheet" href="{{ request.url_for('static', path='app.css') }}">
+<link rel="stylesheet" href="{{ request.url_for('static', path='cook.css') }}">
+</head>
+<body class="cook" data-font="1" data-webm="GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAALcEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHWTbuMU6uEElTDZ1OsggEcTbuMU6uEHFO7a1OsggLG7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsCrXsYMPQkBNgIxMYXZmNjEuMS4xMDBXQYxMYXZmNjEuMS4xMDBEiYhAp3AAAAAAABZUrmvBrgEAAAAAAAA414EBc8WIC6YygzvxkQCcgQAitZyDdW5kiIEAhoVWX1ZQOIOBASPjg4QO5rKA4ImwgRC6gRCagQISVMNn+nNzn2PAgGfImUWjh0VOQ09ERVJEh4xMYXZmNjEuMS4xMDBzc9VjwItjxYgLpjKDO/GRAGfIoEWjh0VOQ09ERVJEh5NMYXZjNjEuMy4xMDAgbGlidnB4Z8ihRaOIRFVSQVRJT05Eh5MwMDowMDowMy4wMDAwMDAwMDAAH0O2dUEl54EAo6OBAACAEAIAnQEqEAAQAABHCIWFiIWEiAICAAwNYAD+/6tQgKOVgQD6ALEBAAEQEAAYABhYL/QACAAAo5WBAfQAsQEAARAQABgAGFgv9AAIAACjlYEC7gCxAQABEBAAGAAYWC/0AAgAAKOVgQPoALEBAAEQEAAYABhYL/QACAAAo5WBBOIAsQEAARAQABgAGFgv9AAIAACjlYEF3ACxAQABEBAAGAAYWC/0AAgAAKOVgQbWALEBAAEQEBRgAGFgv9AAIAAAo5WBB9AAsQEAARAQABgAGFgv9AAIAACjlYEIygCxAQABEBAAGAAYWC/0AAgAAKOVgQnEALEBAAEQEAAYABhYL/QACAAAo5WBCr4AsQEAARAQABgAGFgv9AAIAAAcU7trkbuPs4EAt4r3gQHxggGb8IED">
+<header class="cookbar">
+  <a class="back" href="{{ request.url_for('recipe_detail', recipe_id=r.id) }}" title="Back to the recipe">&larr;</a>
+  <h1>{{ r.title }}</h1>
+  <div class="servings" title="Scale the recipe">
+    <button id="srvMinus" aria-label="Fewer servings">&minus;</button>
+    <span id="srvLabel"></span>
+    <button id="srvPlus" aria-label="More servings">+</button>
+  </div>
+  <button id="fontMinus" title="Smaller text">A&minus;</button>
+  <button id="fontPlus" title="Larger text">A+</button>
+  <button id="btnReset" title="Uncheck everything">Reset</button>
+  <span id="awake" class="awake" title="Screen stays awake while this page is open">☀</span>
+</header>
+<nav class="tabs"><button class="on" data-tab="ing">Ingredients</button><button data-tab="steps">Steps</button></nav>
+<main class="cookmain">
+  <section id="ing" class="pane on"><h2>Ingredients</h2><div id="ingList"></div></section>
+  <section id="steps" class="pane"><h2>Steps</h2><div id="stepList"></div></section>
+</main>
+<div id="timers"></div>
+<video id="keepawake" loop muted playsinline hidden></video>
+<script id="recipe-data" type="application/json">{{ data | tojson }}</script>
+<script src="{{ request.url_for('static', path='cook.js') }}"></script>
+</body>
+</html>

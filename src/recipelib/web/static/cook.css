@@ -1,0 +1,43 @@
+body.cook { background: var(--bg); font-size: calc(18px * var(--f, 1)); }
+body.cook[data-font="2"] { --f: 1.2; } body.cook[data-font="3"] { --f: 1.45; } body.cook[data-font="0"] { --f: 0.9; }
+.cookbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+  background: var(--panel); border-bottom: 1px solid var(--line); }
+.cookbar h1 { flex: 1; font-size: 1.1em; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cookbar .back { text-decoration: none; font-size: 1.4em; padding: 0 6px; }
+.cookbar button { font: inherit; font-size: .85em; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+.cookbar .servings { display: inline-flex; align-items: center; gap: 4px; }
+.cookbar .servings span { min-width: 6em; text-align: center; font-weight: 600; font-size: .9em; }
+.cookbar .awake { opacity: .3; font-size: 1.1em; } .cookbar .awake.on { opacity: 1; color: var(--warn); }
+.tabs { display: none; }
+.cookmain { display: grid; grid-template-columns: minmax(280px, 1fr) 2fr; gap: 24px; padding: 16px; max-width: 1500px; margin: 0 auto; }
+.pane h2 { margin: 0 0 8px; font-size: 1em; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.pane h3 { margin: 14px 0 4px; font-size: .95em; color: var(--muted); }
+#ing { position: sticky; top: 60px; align-self: start; max-height: calc(100vh - 80px); overflow: auto; }
+.item { display: flex; gap: 12px; align-items: flex-start; padding: 10px 6px; border-bottom: 1px solid var(--line); cursor: pointer; line-height: 1.35; }
+.item.done { opacity: .45; text-decoration: line-through; }
+.item .box { flex: none; width: 1.3em; height: 1.3em; border: 2px solid var(--muted); border-radius: 6px; margin-top: .1em; display: flex; align-items: center; justify-content: center; font-size: .9em; }
+.item.done .box { background: var(--ok); border-color: var(--ok); color: #fff; }
+.item .q { font-weight: 700; margin-right: .3em; }
+.item .prep { color: var(--muted); }
+.step { display: flex; gap: 14px; padding: 14px 6px; border-bottom: 1px solid var(--line); cursor: pointer; line-height: 1.45; }
+.step.done { opacity: .45; }
+.step.current { background: var(--chip); border-radius: 10px; }
+.step .n { flex: none; width: 2em; height: 2em; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.step.done .n { background: var(--ok); }
+.step .body { flex: 1; }
+.step .timer { display: inline-block; margin-top: 8px; font: inherit; font-size: .8em; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); background: none; cursor: pointer; }
+#timers { position: fixed; bottom: 16px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 6; }
+#timers .t { background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 12px; display: flex; gap: 12px; align-items: center; box-shadow: var(--shadow); font-variant-numeric: tabular-nums; }
+#timers .t.over { background: var(--bad); color: #fff; animation: blink 1s infinite; }
+#timers .t button { background: none; border: 1px solid currentColor; color: inherit; border-radius: 6px; padding: 2px 8px; cursor: pointer; font: inherit; font-size: .8em; }
+@keyframes blink { 50% { opacity: .6; } }
+@media (max-width: 800px) {
+  .tabs { display: flex; position: sticky; top: 52px; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .tabs button { flex: 1; font: inherit; padding: 10px; border: 0; background: none; color: var(--muted); font-weight: 600; }
+  .tabs button.on { color: var(--accent); box-shadow: inset 0 -3px var(--accent); }
+  .cookmain { display: block; padding: 10px; }
+  .pane { display: none; } .pane.on { display: block; }
+  #ing { position: static; max-height: none; }
+  .cookbar h1 { font-size: 1em; }
+  .cookbar #btnReset, .cookbar #fontMinus { display: none; }
+}

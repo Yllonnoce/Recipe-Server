@@ -27,12 +27,28 @@
       </div>
       {% include "partials/tags.html" %}
       <div class="actions">
-        <a class="btn primary" href="{{ request.url_for('recipe_read', recipe_id=r.id) }}">📖 Read PDF</a>
+        {% if r.ingredients or r.steps %}<a class="btn primary" href="{{ request.url_for('recipe_cook', recipe_id=r.id) }}">🍳 Cook</a>{% endif %}
+        <a class="btn {{ 'primary' if not (r.ingredients or r.steps) }}" href="{{ request.url_for('recipe_read', recipe_id=r.id) }}">📖 Read PDF</a>
         <a class="btn" href="{{ request.url_for('recipe_edit', recipe_id=r.id) }}">✎ Edit</a>
         {% include "partials/fav_button.html" %}
         <a class="btn" href="{{ request.url_for('recipe_file', recipe_id=r.id) }}?dl=1">⬇ PDF</a>
         <form method="post" action="{{ request.url_for('recipe_delete', recipe_id=r.id) }}" onsubmit="return confirm('Delete this recipe? The PDF stays in the assets folder.')"><button class="btn danger">Delete</button></form>
       </div>
+      {% if r.ingredients %}
+      <div class="actions secondary">
+        <form class="inline-form" hx-post="{{ request.url_for('shopping_add_recipe', recipe_id=r.id) }}" hx-target="#shop-msg" hx-swap="innerHTML">
+          <label class="mini">Servings <input name="servings" type="number" step="0.5" min="0.5" value="{{ (r.servings|int if r.servings == r.servings|int else r.servings) if r.servings else 1 }}"></label>
+          <button class="btn small">🛒 Add to shopping list</button>
+        </form>
+        <form class="inline-form" method="post" action="{{ request.url_for('plan_add') }}">
+          <input type="hidden" name="recipe_id" value="{{ r.id }}">
+          <label class="mini">Day <input name="date" type="date" required></label>
+          <select name="slot"><option>dinner</option><option>lunch</option><option>breakfast</option><option>snack</option></select>
+          <button class="btn small">📅 Add to plan</button>
+        </form>
+        <span id="shop-msg" class="muted"></span>
+      </div>
+      {% endif %}
       {% if bookmarks %}
       <div class="bm-chips">
         {% for b in bookmarks %}<a class="chip" href="{{ request.url_for('recipe_read', recipe_id=r.id) }}?page={{ b.page }}">🔖 {{ b.label }}</a>{% endfor %}

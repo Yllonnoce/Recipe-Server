@@ -72,8 +72,8 @@ def create_app() -> FastAPI:
     static_dir = str(resources.files("recipelib.web") / "static")
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-    from .web.routes import assets, capture, library, reader, recipe, settings
-    for mod in (library, recipe, reader, capture, assets, settings):
+    from .web.routes import assets, capture, cook, library, mealplan, reader, recipe, settings, shopping
+    for mod in (library, recipe, reader, cook, capture, assets, settings, shopping, mealplan):
         app.include_router(mod.router)
     return app
 

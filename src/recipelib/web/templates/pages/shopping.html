@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Shopping list — Recipe Library{% endblock %}
+{% block content %}
+<div class="shop">
+  <h1>Shopping list</h1>
+  <form class="add" hx-post="{{ request.url_for('shopping_add_item') }}" hx-target="#list" hx-on::after-request="this.reset()">
+    <input name="text" placeholder="Add an item, e.g. 2 lb apples" autocomplete="off" required>
+    <button class="btn primary" type="submit">Add</button>
+  </form>
+  <div id="list">{% include "partials/shopping_list.html" %}</div>
+</div>
+{% endblock %}

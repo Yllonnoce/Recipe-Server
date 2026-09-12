@@ -53,3 +53,23 @@ service definition with the right paths for this machine.
 
 `recipes backup` writes a zip of the database and all PDFs to `~/RecipeLibrary/backups`.
 Restoring is unzipping it into a fresh library folder.
+
+## HTTPS (optional)
+
+Browsers only allow the "keep the screen awake" feature in cook mode on secure pages.
+On the LAN a self-signed certificate is enough:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=recipes.local" \
+  -keyout ~/RecipeLibrary/key.pem -out ~/RecipeLibrary/cert.pem
+```
+
+then in the config file:
+
+```toml
+ssl_certfile = "/home/you/RecipeLibrary/cert.pem"
+ssl_keyfile = "/home/you/RecipeLibrary/key.pem"
+```
+
+and open `https://<server>:8000`, accepting the certificate once on each device. Without
+HTTPS cook mode falls back to a silent looping video, which keeps most tablets awake.

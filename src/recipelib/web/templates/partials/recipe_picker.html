@@ -1,0 +1,5 @@
+{% for r in recipes %}
+<label><input type="radio" name="recipe_id" value="{{ r.id }}"> {{ r.title }}{% if r.servings %} <span class="muted">· {{ r.servings|int if r.servings == r.servings|int else r.servings }} servings</span>{% endif %}</label>
+{% else %}
+<div class="muted" style="padding:8px">No recipes match.</div>
+{% endfor %}

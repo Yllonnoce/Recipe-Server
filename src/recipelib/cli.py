@@ -45,8 +45,11 @@ def serve(host: str | None = None, port: int | None = None, ipp_port: int | None
     cfg = get_settings(reload=True)
     cfg.ensure_dirs()
     import uvicorn
+    ssl = {}
+    if cfg.ssl_certfile and cfg.ssl_keyfile:
+        ssl = {"ssl_certfile": str(cfg.ssl_certfile), "ssl_keyfile": str(cfg.ssl_keyfile)}
     uvicorn.run("recipelib.app:app", host=cfg.host, port=cfg.port, reload=reload,
-                log_level=cfg.log_level.lower(), access_log=False)
+                log_level=cfg.log_level.lower(), access_log=False, **ssl)
 
 
 @cli.command()

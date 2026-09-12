@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     log_level: str = "info"
+    ssl_certfile: Path | None = None    # set both to serve https (needed for the tablet wake lock)
+    ssl_keyfile: Path | None = None
 
     # capture
     watch_interval: float = 5.0
