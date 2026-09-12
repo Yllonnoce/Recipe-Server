@@ -13,7 +13,7 @@ from ..db import fts
 from ..db.models import Bookmark, Ingredient, Recipe, RecipeText, Step, Tag, utcnow
 from ..extract.normalize import parse_ingredient_block, parse_step_block
 
-TAG_KINDS = ("course", "cuisine", "source", "custom")
+TAG_KINDS = ("category", "course", "cuisine", "source", "custom")
 
 
 def get(s: Session, recipe_id: int) -> Recipe | None:
@@ -96,6 +96,9 @@ def get_or_create_tag(s: Session, name: str, kind: str = "custom") -> Tag:
     kind = kind if kind in TAG_KINDS else "custom"
     if kind in ("course", "cuisine"):
         name = name.lower()
+    if kind == "category":
+        from .categories import normalize
+        name = normalize(name) or name
     t = s.scalar(select(Tag).where(Tag.kind == kind, func.lower(Tag.name) == name.lower()))
     if t is None:
         t = Tag(name=name, kind=kind)
@@ -203,6 +206,8 @@ def apply_edit_form(s: Session, r: Recipe, form: dict) -> None:
     r.notes = (form.get("notes") or "").strip() or None
     replace_ingredients(s, r, parse_ingredient_block(form.get("ingredients") or ""))
     replace_steps(s, r, parse_step_block(form.get("steps") or ""))
+    if "categories" in form or form.get("_categories_present"):
+        set_tags(s, r, "category", _split_tags(form.get("categories")))
     set_tags(s, r, "course", _split_tags(form.get("course")))
     set_tags(s, r, "cuisine", _split_tags(form.get("cuisine")))
     set_tags(s, r, "custom", _split_tags(form.get("tags")))
@@ -232,6 +237,27 @@ def set_text(s: Session, r: Recipe, page_texts: list[str], source: str) -> None:
         r.text.text = body
         r.text.text_source = source
         r.text.page_texts = json.dumps(page_texts)
+
+
+def assign_categories(s: Session, r: Recipe, extra: list[str] = (), replace: bool = False) -> list[str]:
+    """Auto-categorise from title, ingredients and course tags. Keeps
+    hand-picked categories unless replace=True."""
+    from .categories import suggest
+    names = suggest(r.title, [i.name for i in r.ingredients], [t.name for t in r.tags_of("course")], list(extra))
+    if not replace:
+        names = [t.name for t in r.tags_of("category")] + [n for n in names if n not in {t.name for t in r.tags_of("category")}]
+    set_tags(s, r, "category", names)
+    return names
+
+
+def categorize_all(s: Session, replace: bool = False) -> int:
+    n = 0
+    for r in s.scalars(select(Recipe).where(Recipe.deleted_at.is_(None))):
+        if r.ingredients or r.steps or r.title:
+            assign_categories(s, r, replace=replace)
+            fts.reindex_recipe(s, r.id)
+            n += 1
+    return n
 
 
 # ---- images ----------------------------------------------------------------

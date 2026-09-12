@@ -210,3 +210,17 @@ dialog::backdrop { background: rgba(0,0,0,.4); }
 .cover-opt .thumb.none { display: flex; align-items: center; justify-content: center; flex-direction: column; }
 .cover-opt input[type=radio]:checked + .thumb { border-color: var(--accent); }
 .cover-opt.current .thumb { border-color: var(--ok); }
+
+/* categories */
+.chip.kind-category { background: #fbe6d5; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chip.kind-category { background: #4a3324; } }
+.facets a.zero { color: var(--muted); }
+.facets a.zero .n { opacity: .5; }
+fieldset.cats { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+fieldset.cats legend { font-weight: 600; font-size: .9em; padding: 0 4px; }
+fieldset.cats label.check { margin: 0; font-size: .9em; }
+
+/* full screen toggle in the header */
+header.top nav .fs { background: none; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); cursor: pointer; font: inherit; padding: 2px 8px; line-height: 1.2; }
+header.top nav .fs:hover, header.top nav .fs.on { color: var(--ink); border-color: var(--muted); }
+:fullscreen header.top { position: static; }

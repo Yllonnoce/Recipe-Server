@@ -28,6 +28,9 @@
   <section class="panel">
     <h2>Maintenance</h2>
     <form method="post" action="{{ request.url_for('settings_reindex') }}"><button class="btn">Rebuild search index</button></form>
+    <p></p>
+    <form method="post" action="{{ request.url_for('settings_categorize') }}"><button class="btn">Assign categories to all recipes</button></form>
+    <p class="muted">Adds categories (Dinner, Dessert, Seafood…) from each recipe's title and ingredients. Categories you ticked by hand are kept.</p>
   </section>
 </div>
 {% endblock %}

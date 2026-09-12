@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from ...db.engine import get_db
 from ...domain import recipes as R
+from ...domain.categories import NAMES as CATEGORY_NAMES
 from ..templating import templates
 
 router = APIRouter()
@@ -27,7 +28,7 @@ def library(request: Request, s: Session = Depends(get_db)):
     f = _filter(request)
     rows, total = R.list_recipes(s, f)
     return templates.TemplateResponse(request, "pages/library.html", {
-        "recipes": rows, "total": total, "f": f, "tags": R.tag_counts(s),
+        "recipes": rows, "total": total, "f": f, "tags": R.tag_counts(s), "category_names": CATEGORY_NAMES,
         "status_counts": R.status_counts(s), "pages": (total + f.per_page - 1) // f.per_page,
     })
 

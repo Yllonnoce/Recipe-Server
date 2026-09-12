@@ -28,3 +28,12 @@ def reindex(request: Request, s: Session = Depends(get_db)):
     n = fts.rebuild_all(s)
     s.commit()
     return RedirectResponse(str(request.url_for("settings")) + f"?m=Search index rebuilt for {n} recipes", status_code=303)
+
+
+@router.post("/settings/categorize", name="settings_categorize")
+def categorize(request: Request, s: Session = Depends(get_db)):
+    """Auto-assign categories to every recipe (keeps ones picked by hand)."""
+    from ...domain import recipes as R
+    n = R.categorize_all(s)
+    s.commit()
+    return RedirectResponse(str(request.url_for("settings")) + f"?m=Categories assigned to {n} recipes", status_code=303)

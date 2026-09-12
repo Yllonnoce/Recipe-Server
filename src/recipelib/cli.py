@@ -81,6 +81,20 @@ def import_(paths: list[Path]):
 
 
 @cli.command()
+def categorize(replace: bool = typer.Option(False, help="drop existing categories and start over")):
+    """Auto-assign categories (Dinner, Dessert, Seafood…) to every recipe."""
+    from .db.engine import init_engine, session_scope
+    from .db.migrate import migrate
+    from .domain import recipes as R
+    cfg = get_settings()
+    migrate(cfg.db_path)
+    init_engine(cfg.db_path)
+    with session_scope() as s:
+        n = R.categorize_all(s, replace=replace)
+    typer.echo(f"categorised {n} recipe(s)")
+
+
+@cli.command()
 def backup(out: Path | None = None):
     """Zip the database and assets into the backups folder."""
     import sqlite3

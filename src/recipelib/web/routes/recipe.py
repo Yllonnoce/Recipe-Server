@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ...capture.queue import get_queue
 from ...db.engine import get_db
 from ...domain import recipes as R
+from ...domain.categories import NAMES as CATEGORY_NAMES
 from ..templating import templates
 
 router = APIRouter(prefix="/recipes")
@@ -49,6 +50,7 @@ def edit(recipe_id: int, request: Request, s: Session = Depends(get_db)):
     return templates.TemplateResponse(request, "pages/edit.html", {
         "r": r, "ingredients_text": R.ingredients_as_text(r), "steps_text": R.steps_as_text(r),
         "candidates": candidates, "preview_pages": list(range(n_pages)),
+        "category_names": CATEGORY_NAMES, "categories": [t.name for t in r.tags_of("category")],
         "course": ", ".join(t.name for t in r.tags_of("course")),
         "cuisine": ", ".join(t.name for t in r.tags_of("cuisine")),
         "custom": ", ".join(t.name for t in r.tags_of("custom")),
@@ -60,7 +62,9 @@ def edit(recipe_id: int, request: Request, s: Session = Depends(get_db)):
 async def edit_save(recipe_id: int, request: Request, s: Session = Depends(get_db)):
     r = _get(s, recipe_id)
     form = await request.form()
-    R.apply_edit_form(s, r, {k: form.get(k) for k in form.keys()})
+    data = {k: form.get(k) for k in form.keys()}
+    data["categories"] = form.getlist("categories")        # checkbox group: all ticked values
+    R.apply_edit_form(s, r, data)
     s.commit()
     return RedirectResponse(request.url_for("recipe_detail", recipe_id=r.id), status_code=303)
 

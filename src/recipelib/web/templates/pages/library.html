@@ -18,7 +18,14 @@
       {% if status_counts.get('needs_review') %}<li><a class="{{ 'on' if f.status == 'needs_review' }}" href="{{ request.url_for('library') }}?status=needs_review">Needs review <span class="n">{{ status_counts['needs_review'] }}</span></a></li>{% endif %}
       {% if status_counts.get('processing') %}<li><a class="{{ 'on' if f.status == 'processing' }}" href="{{ request.url_for('library') }}?status=processing">Processing <span class="n">{{ status_counts['processing'] }}</span></a></li>{% endif %}
     </ul>
-    {% for kind, label in [('course','Course'),('cuisine','Cuisine'),('custom','Tags'),('source','Source')] %}
+    <h4>Categories</h4>
+    <ul class="facets">
+      {% set counts = dict(tags.get('category', [])) %}
+      {% for name in category_names %}
+      <li><a class="{{ 'on' if f.tag == 'category:' ~ name }} {{ 'zero' if not counts.get(name) }}" href="{{ request.url_for('library') }}?tag=category:{{ name | urlencode }}">{{ name }} <span class="n">{{ counts.get(name, 0) }}</span></a></li>
+      {% endfor %}
+    </ul>
+    {% for kind, label in [('cuisine','Cuisine'),('custom','Tags'),('course','Course'),('source','Source')] %}
       {% if tags.get(kind) %}
       <h4>{{ label }}</h4>
       <ul class="facets">

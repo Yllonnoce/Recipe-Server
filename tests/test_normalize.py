@@ -65,3 +65,12 @@ def test_detect_times_header_line():
     t = detect_times("Lemon Chicken\nServes 4 · Prep 15 min · Cook 1 hour\nIngredients")
     assert t == {"prep_min": 15, "cook_min": 60, "total_min": None, "servings": 4.0}
     assert detect_times("no numbers here")["prep_min"] is None
+
+
+def test_category_suggestions():
+    from recipelib.domain.categories import normalize, suggest
+    assert suggest("Garlic Shrimp Scampi", ["shrimp", "garlic", "linguine"], [], []) == ["Dinner", "Pasta", "Seafood"]
+    assert suggest("Red Velvet Cake", ["flour", "sugar", "eggs"], ["dessert"], []) == ["Dessert"]
+    assert "Vegan" in suggest("Green Smoothie Bowl", ["banana", "spinach", "oat milk"], [], ["breakfast"])
+    assert suggest("Beef Stew", ["beef", "carrots", "stock"], [], ["Soup"]) == ["Soup", "Beef"]
+    assert normalize("main course") == "Dinner" and normalize("SEAFOOD") == "Seafood" and normalize("weird") is None

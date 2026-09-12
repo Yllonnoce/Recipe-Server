@@ -80,6 +80,17 @@ def test_upload_to_library(client, library, tmp_path):
         assert [i.group_name for i in rec.ingredients] == [None, None, None, "To serve"]
         assert rec.steps[1].minutes == 3
     assert "Fluffy Pancakes" in client.get("/partials/cards", params={"q": "weekend"}).text
+    # categories: ticked on the edit page, auto-assigned via settings, browsable in the sidebar
+    r = client.post(f"/recipes/{rid}/edit", data={"title": "Fluffy Pancakes", "ingredients": "2 cups flour\n2 eggs", "steps": "Fry.",
+                                                  "_categories_present": "1", "categories": ["Breakfast", "Vegetarian"]}, follow_redirects=False)
+    assert r.status_code == 303
+    with session_scope() as s:
+        assert sorted(t.name for t in s.get(Recipe, rid).tags_of("category")) == ["Breakfast", "Vegetarian"]
+    assert "Fluffy Pancakes" in client.get("/partials/cards", params={"tag": "category:Breakfast"}).text
+    assert "Fluffy Pancakes" not in client.get("/partials/cards", params={"tag": "category:Seafood"}).text
+    home = client.get("/").text
+    assert "category:Seafood" in home and "category:Dessert" in home
+    assert client.post("/settings/categorize", follow_redirects=False).status_code == 303
     assert "Fluffy Pancakes" in client.get("/partials/cards", params={"tag": "course:breakfast"}).text
 
     # cover picker: page render, no photo, upload

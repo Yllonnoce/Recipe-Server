@@ -27,7 +27,8 @@
       <h3>{{ r.title }}</h3>
       <div class="sub">
         {% if r.total_min %}<span>⏱ {{ r.total_min|mins }}</span>{% endif %}
-        {% for t in r.tags if t.kind in ('course','cuisine') %}<span class="chip">{{ t.name }}</span>{% endfor %}
+        {% for t in (r.tags|selectattr('kind','equalto','category')|list)[:2] %}<span class="chip kind-category">{{ t.name }}</span>{% endfor %}
+        {% for t in r.tags if t.kind == 'cuisine' %}<span class="chip">{{ t.name }}</span>{% endfor %}
       </div>
     </div>
   </a>

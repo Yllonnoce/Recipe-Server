@@ -386,6 +386,8 @@ def stage_normalize(ctx: Ctx):
             R.set_tags(s, r, "cuisine", [str(d["cuisine"])])
         if r.source_name:
             R.set_tags(s, r, "source", [r.source_name])
+        s.flush()
+        R.assign_categories(s, r, extra=[str(c) for c in (d.get("categories") or [])], replace=not ctx.force)
         conf = r.confidence if r.confidence is not None else 0.7
         r.status = "ready" if (conf >= 0.6 and ing_rows and step_rows) else "needs_review"
         r.updated_at = utcnow()

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from ..domain.categories import NAMES as CATEGORY_NAMES
+
 
 class IngredientDraft(BaseModel):
     group: str | None = Field(None, description="Sub-heading this ingredient sits under, e.g. 'For the sauce', else null")
@@ -34,6 +36,7 @@ class RecipeDraft(BaseModel):
     yield_text: str | None = Field(None, description="Yield as written, e.g. '12 muffins', else null")
     cuisine: str | None = Field(None, description="Cuisine such as italian, mexican, thai, else null")
     course: str | None = Field(None, description="breakfast, lunch, dinner, dessert, snack, side, drink, appetizer, else null")
+    categories: list[str] = Field(default_factory=list, description="One or more of: " + ", ".join(CATEGORY_NAMES))
     language: str = Field("en", description="Two-letter language code of the recipe text")
     confidence: float = Field(..., description="0 to 1: how confident you are that the extraction is complete and accurate")
 
@@ -54,5 +57,6 @@ Rules:
 - Use the first introductory sentence(s) about the dish as the description when present.
 - "to taste" or unquantified ingredients get quantity null, never 0.
 - If the text is not a recipe at all, set is_recipe to false and leave the lists empty.
+- categories: choose every one that fits from the allowed list (a shrimp pasta is Dinner, Pasta and Seafood).
 - confidence: 0.9+ when ingredients and steps are clearly present and complete; lower when guessing.
 """

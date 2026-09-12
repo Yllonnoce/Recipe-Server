@@ -24,6 +24,13 @@
       <textarea name="ingredients" rows="12" placeholder="2 cups flour&#10;1 tsp salt&#10;For the sauce:&#10;1 can tomatoes">{{ ingredients_text }}</textarea></label>
     <label>Directions <small>one step per line</small>
       <textarea name="steps" rows="12">{{ steps_text }}</textarea></label>
+    <fieldset class="cats">
+      <legend>Categories</legend>
+      <input type="hidden" name="_categories_present" value="1">
+      {% for name in category_names %}
+      <label class="check"><input type="checkbox" name="categories" value="{{ name }}" {{ 'checked' if name in categories }}> {{ name }}</label>
+      {% endfor %}
+    </fieldset>
     <div class="row">
       <label>Course <input name="course" value="{{ course }}" list="courses" placeholder="dinner, dessert"></label>
       <label>Cuisine <input name="cuisine" value="{{ cuisine }}" list="cuisines" placeholder="italian"></label>

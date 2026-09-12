@@ -131,6 +131,16 @@
   $('fontPlus').onclick = () => { state.font = Math.min(3, (state.font || 1) + 1); save(); applyFont(); };
   $('fontMinus').onclick = () => { state.font = Math.max(0, (state.font || 1) - 1); save(); applyFont(); };
   $('btnReset').onclick = () => { state.ing = {}; state.steps = {}; save(); render(); };
+  const fullscreen = () => {
+    if (document.fullscreenElement) { document.exitFullscreen(); return; }
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+  };
+  $('btnFull').onclick = fullscreen;
+  document.addEventListener('keydown', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.key === 'f' || e.key === 'F') fullscreen();
+  });
   document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
     document.querySelectorAll('.pane').forEach((p) => p.classList.toggle('on', p.id === b.dataset.tab));

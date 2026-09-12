@@ -7,7 +7,7 @@
   {% endfor %}
   <form class="tag-add" hx-post="{{ request.url_for('recipe_tag_add', recipe_id=r.id) }}" hx-target="#tags" hx-swap="outerHTML">
     <input name="name" placeholder="add tag" maxlength="60" autocomplete="off">
-    <select name="kind"><option value="custom">tag</option><option value="course">course</option><option value="cuisine">cuisine</option></select>
+    <select name="kind"><option value="custom">tag</option><option value="category">category</option><option value="course">course</option><option value="cuisine">cuisine</option></select>
     <button class="btn small" type="submit">Add</button>
   </form>
 </div>

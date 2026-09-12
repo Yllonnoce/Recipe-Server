@@ -18,11 +18,29 @@
     <a href="{{ request.url_for('shopping') }}">Shopping</a>
     <a href="{{ request.url_for('plan') }}">Plan</a>
     <a href="{{ request.url_for('settings') }}">Settings</a>
+    <button class="fs" type="button" id="fsBtn" title="Full screen (F11 also works)">&#x26F6;</button>
   </nav>
 </header>
 <main class="wrap">
 {% block content %}{% endblock %}
 </main>
+<script>
+(function () {
+  const b = document.getElementById('fsBtn');
+  if (!b) return;
+  const el = document.documentElement;
+  const on = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  const paint = () => { b.classList.toggle('on', on()); b.title = on() ? 'Exit full screen' : 'Full screen'; };
+  b.addEventListener('click', () => {
+    if (on()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req) req.call(el).catch(() => {});
+  });
+  document.addEventListener('fullscreenchange', paint);
+  document.addEventListener('webkitfullscreenchange', paint);
+  paint();
+})();
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
