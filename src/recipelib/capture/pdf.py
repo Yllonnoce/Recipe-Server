@@ -150,7 +150,12 @@ def resize_png(png: bytes, width: int) -> tuple[bytes, int, int]:
 
 
 def images_to_pdf(images: list[bytes], dpi: int = 150) -> bytes:
-    """Wrap raw image bytes (png/jpeg/etc, or a decoded pixmap) into a PDF, one page each."""
+    """Wrap raw image bytes (png/jpeg/etc, or a decoded pixmap) into a PDF, one page each.
+    Photos are recompressed first when shrinking is on."""
+    from ..config import get_settings
+    if get_settings().shrink_files:
+        from .shrink import shrink_image_bytes
+        images = [shrink_image_bytes(d)[0] for d in images]
     doc = pymupdf.open()
     for data in images:
         pix = pymupdf.Pixmap(data)

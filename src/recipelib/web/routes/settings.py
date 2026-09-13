@@ -19,7 +19,7 @@ def settings(request: Request, s: Session = Depends(get_db)):
     from ... import updater
     from ... import backup as B
     return templates.TemplateResponse(request, "pages/settings.html", {
-        **_update_ctx(), "backups": B.list_backups(), "bk": B.STATE,
+        **_update_ctx(), "backups": B.list_backups(), "bk": B.STATE, "shrink": SHRINK,
         "cfg": get_settings(), "config_path": config_path(), "version": __version__,
         "checks": run_checks(quick=True), "message": request.query_params.get("m"),
         "printer": getattr(request.app.state, "printer", None), "host": request.url.hostname,
@@ -156,3 +156,27 @@ async def backup_upload(request: Request, file: UploadFile = File(...)):
         while chunk := await file.read(1 << 20):
             fh.write(chunk)
     return RedirectResponse(str(request.url_for("settings")) + f"?m=Uploaded {name}; choose Merge or Replace below#backups", status_code=303)
+
+
+SHRINK = {"running": False, "result": None}
+
+
+@router.post("/settings/shrink", name="settings_shrink")
+def shrink_files(request: Request):
+    """Recompress stored PDFs and pictures in the background."""
+    import threading
+
+    from ...capture.shrink import shrink_library
+    if not SHRINK["running"]:
+        SHRINK.update(running=True, result=None)
+
+        def run():
+            try:
+                t = shrink_library()
+                SHRINK["result"] = f"{t['files']} files looked at, {t['changed']} shrunk, {(t['before'] - t['after']) / 1048576:.1f} MB saved"
+            except Exception as e:  # noqa: BLE001
+                SHRINK["result"] = f"failed: {type(e).__name__}: {e}"
+            finally:
+                SHRINK["running"] = False
+        threading.Thread(target=run, name="shrink", daemon=True).start()
+    return RedirectResponse(str(request.url_for("settings")) + "?m=Shrinking stored files in the background; the result shows under Maintenance when done", status_code=303)

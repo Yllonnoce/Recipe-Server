@@ -149,6 +149,16 @@ combine two libraries, say the laptop's and the Mac's; tick "let backup win" to 
 backup's version replace matching local recipes. **Replace** wipes the library first and
 puts the backup in its place. A backup from an older version is migrated on the way in.
 
+## File sizes
+
+Phone photos and printed web pages are big. By default (`shrink_files = true`) the server
+recompresses photos with Pillow (longest side `image_max_px` = 2000, JPEG quality
+`jpeg_quality` = 82), downsamples the images inside incoming PDFs to `pdf_image_dpi` = 150
+with PyMuPDF, and stores covers and thumbnails as JPEG. The original is kept whenever
+shrinking would save less than 10 %. Set `pdf_image_dpi = 0` to leave PDFs untouched, or
+`shrink_files = false` to turn it all off. `recipes shrink` (or Settings → Maintenance →
+"Shrink stored PDFs and pictures") applies the same to what is already in the library.
+
 ## Memory and the model
 
 The server loads the model into memory at startup and keeps it there

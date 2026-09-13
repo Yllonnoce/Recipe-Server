@@ -55,7 +55,7 @@ class Ctx:
     queue: object = None
 
 
-STAGES = ["fetch", "raster_to_pdf", "hash_dedup", "store", "text", "ocr", "thumbnail",
+STAGES = ["fetch", "raster_to_pdf", "shrink", "hash_dedup", "store", "text", "ocr", "thumbnail",
           "structured", "llm", "normalize", "index"]
 
 
@@ -131,6 +131,21 @@ def stage_raster_to_pdf(ctx: Ctx):
     out = ctx.pdf_path.with_suffix(".pdf")
     to_pdf.convert_file(ctx.pdf_path, out)
     ctx.pdf_path = out
+    return False
+
+
+def stage_shrink(ctx: Ctx):
+    """Downsample images inside a freshly captured PDF (never an already stored asset)."""
+    cfg = get_settings()
+    if not cfg.shrink_files or ctx.pdf_path is None or ctx.recipe_id is not None:
+        return True
+    if str(cfg.assets_dir) in str(ctx.pdf_path):
+        return True
+    from . import shrink
+    before, after = shrink.shrink_pdf(ctx.pdf_path)
+    if after == before:
+        return True
+    _mark(ctx, "shrink", f"{before // 1024} KB -> {after // 1024} KB")
     return False
 
 

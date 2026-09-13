@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     workers: int = 2
     paper: str = "letter"          # letter | a4 (default for URL rendering and the printer)
     ocr_enabled: bool = True
+    shrink_files: bool = True       # recompress photos and downsample images inside PDFs on the way in
+    image_max_px: int = 2000        # longest side of a stored photo
+    jpeg_quality: int = 82
+    pdf_image_dpi: int = 150        # images inside PDFs are downsampled to this (0 = leave PDFs alone)
 
     # virtual printer
     printer_enabled: bool = True

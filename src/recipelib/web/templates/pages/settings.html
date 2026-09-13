@@ -16,6 +16,7 @@
       <tr><th>LLM</th><td>{{ cfg.ollama_model }} via {{ cfg.ollama_host }} ({{ 'on' if cfg.llm_enabled else 'off' }})</td></tr>
       <tr><th>OCR</th><td>{{ 'on' if cfg.ocr_enabled else 'off' }}</td></tr>
       <tr><th>Paper</th><td>{{ cfg.paper }}</td></tr>
+      <tr><th>Shrink files</th><td>{{ 'on' if cfg.shrink_files else 'off' }} (photos ≤ {{ cfg.image_max_px }} px, PDF images {{ cfg.pdf_image_dpi }} dpi, JPEG {{ cfg.jpeg_quality }})</td></tr>
     </table>
     <p class="muted">Edit the config file and restart the server to change these.</p>
   </section>
@@ -68,6 +69,9 @@
     <form method="post" action="{{ request.url_for('settings_reindex') }}"><button class="btn">Rebuild search index</button></form>
     <p></p>
     <form method="post" action="{{ request.url_for('settings_categorize') }}"><button class="btn">Assign categories to all recipes</button></form>
+    <p></p>
+    <form method="post" action="{{ request.url_for('settings_shrink') }}"><button class="btn" {{ 'disabled' if shrink.running }}>{{ 'Shrinking…' if shrink.running else 'Shrink stored PDFs and pictures' }}</button></form>
+    <p class="muted">Downsamples images inside stored PDFs to {{ cfg.pdf_image_dpi }} dpi and converts covers and thumbnails to JPEG (quality {{ cfg.jpeg_quality }}). New captures are shrunk automatically{{ '' if cfg.shrink_files else ' (currently off: shrink_files = false)' }}.{% if shrink.result %} <strong>Last run:</strong> {{ shrink.result }}{% endif %}</p>
     <p class="muted">Adds categories (Dinner, Dessert, Seafood…) from each recipe's title and ingredients. Categories you ticked by hand are kept.</p>
   </section>
 </div>

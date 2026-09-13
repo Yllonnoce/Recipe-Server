@@ -169,6 +169,19 @@ def backup(out: Path | None = typer.Option(None, help="zip path (default: Recipe
 
 
 @cli.command()
+def shrink():
+    """Recompress every stored PDF, cover and thumbnail (uses the shrink_* config values)."""
+    from .capture.shrink import shrink_library
+    from .db.engine import init_engine
+    from .db.migrate import migrate
+    cfg = get_settings()
+    migrate(cfg.db_path)
+    init_engine(cfg.db_path)
+    t = shrink_library(progress=lambda x: typer.echo(f"\r  {x['files']} files, saved {(x['before'] - x['after']) // 1024 // 1024} MB", nl=False))
+    typer.echo(f"\n{t['files']} files looked at, {t['changed']} shrunk, {(t['before'] - t['after']) / 1048576:.1f} MB saved")
+
+
+@cli.command()
 def restore(zip_path: Path, replace: bool = typer.Option(False, help="wipe the library first instead of merging"),
             overwrite: bool = typer.Option(False, help="when merging, let backup recipes replace matching local ones")):
     """Merge a backup into the library (or replace the library with it)."""

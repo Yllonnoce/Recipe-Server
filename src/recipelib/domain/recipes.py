@@ -297,16 +297,20 @@ def store_image(s: Session, png: bytes, kind: str):
     from ..config import get_settings
     from ..db.models import Asset
     cfg = get_settings()
+    mime, ext = "image/png", ".png"
+    if cfg.shrink_files and kind in ("cover", "thumb"):
+        from ..capture.shrink import to_jpeg
+        png, mime, ext = to_jpeg(png), "image/jpeg", ".jpg"
     sha = sha256_bytes(png)
     a = s.scalar(select(Asset).where(Asset.sha256 == sha, Asset.kind == kind))
     if a is not None:
         return a
-    rel = Path(kind) / sha[:2] / f"{sha}.png"
+    rel = Path(kind) / sha[:2] / f"{sha}{ext}"
     dest = cfg.assets_dir / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(png)
     pix = pymupdf.Pixmap(png)
-    a = Asset(kind=kind, rel_path=rel.as_posix(), sha256=sha, bytes=len(png), mime="image/png",
+    a = Asset(kind=kind, rel_path=rel.as_posix(), sha256=sha, bytes=len(png), mime=mime,
               width=pix.width, height=pix.height)
     s.add(a)
     s.flush()
