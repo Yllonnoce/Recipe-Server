@@ -26,17 +26,55 @@ def normalize_url(u: str) -> str:
     return u
 
 
+def resolve_url(u: str) -> str:
+    """A bare name like 'ubuntu' won't resolve on a home network; try 'ubuntu.local'."""
+    import socket
+    from urllib.parse import urlsplit, urlunsplit
+    u = normalize_url(u)
+    parts = urlsplit(u)
+    host = parts.hostname or ""
+    if not host or "." in host or host == "localhost":
+        return u
+    try:
+        socket.gethostbyname(host)
+        return u
+    except OSError:
+        pass
+    try:
+        socket.gethostbyname(host + ".local")
+        netloc = host + ".local" + (f":{parts.port}" if parts.port else "")
+        return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    except OSError:
+        return u
+
+
+def explain(err: Exception) -> str:
+    msg = str(err)
+    if any(k in msg for k in ("nodename nor servname", "Name or service not known", "Temporary failure in name resolution",
+                                "getaddrinfo", "Errno 8]", "Errno -2]", "Errno -3]", "gaierror")):
+        return ("that name could not be looked up. Use the server's IP address (Settings → Network lists it), "
+                "or its Bonjour name ending in .local, e.g. http://ubuntu.local:8000")
+    if "Errno 65" in msg or "No route to host" in msg:
+        return "macOS is blocking this program's access to the local network (System Settings → Privacy & Security → Local Network → allow python3)"
+    if "Connection refused" in msg or "Errno 61" in msg or "Errno 111" in msg:
+        return "nothing is listening at that address and port (is the other server running, and is the port right: 8000, or 80 with nginx?)"
+    return f"{type(err).__name__}: {msg[:140]}"
+
+
 def primary_info(url: str, timeout: float = 5.0) -> dict:
     import httpx
-    r = httpx.get(normalize_url(url) + "/api/backup/info", timeout=timeout)
+    r = httpx.get(resolve_url(url) + "/api/backup/info", timeout=timeout)
     r.raise_for_status()
-    return r.json()
+    data = r.json()
+    if data.get("app") != "recipelib":
+        raise ValueError("that address answered, but it is not a Recipe Library server")
+    return data
 
 
 def pull_backup(url: str, dest_dir: Path, timeout: float = 600.0) -> Path:
     """Download a fresh backup from the primary into dest_dir. Returns the zip path."""
     import httpx
-    url = normalize_url(url)
+    url = resolve_url(url)
     host = url.split("://", 1)[1].replace(":", "_").replace("/", "_")
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     dest = dest_dir / f"mirror-{host}-{stamp}.zip"
@@ -73,7 +111,7 @@ def sync_once(url: str | None = None, mode: str | None = None) -> str:
         log.info("mirror: %s", msg)
         return msg
     except Exception as e:  # noqa: BLE001
-        msg = f"{datetime.now():%b %d %H:%M}: sync from {url} failed: {type(e).__name__}: {str(e)[:160]}"
+        msg = f"{datetime.now():%b %d %H:%M}: sync from {url} failed: {explain(e)}"
         STATE.update(last_ok=False, result=msg, last_run=time.time())
         log.warning("mirror: %s", msg)
         raise

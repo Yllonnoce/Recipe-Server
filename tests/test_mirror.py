@@ -49,7 +49,9 @@ def test_mirror_settings_panel(client, library, monkeypatch):
     assert 'mirror_of = "http://macm5.local"' in config_path().read_text()
     assert get_settings().mirror_interval_hours == 12.0
     t = client.post("/settings/mirror/test", data={"mirror_of": "http://127.0.0.1:1"}).text
-    assert "not a reachable Recipe Library" in t
+    assert "not a reachable Recipe Library" in t and "nothing is listening" in t
+    t = client.post("/settings/mirror/test", data={"mirror_of": "http://no-such-host-xyz"}).text
+    assert "could not be looked up" in t
     monkeypatch.setattr(mirror, "primary_info", lambda url, timeout=5.0: {"version": "0.1.0", "recipes": 7})
     t = client.post("/settings/mirror/test", data={"mirror_of": "http://macm5.local"}).text
     assert "with 7 recipes" in t

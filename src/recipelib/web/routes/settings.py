@@ -322,7 +322,7 @@ def mirror_test(request: Request, mirror_of: str = Form("")):
         info = mirror.primary_info(mirror_of or get_settings().mirror_of)
         ctx["test"] = f"✅ {mirror.normalize_url(mirror_of or get_settings().mirror_of)} is a Recipe Library v{info.get('version')} with {info.get('recipes')} recipes"
     except Exception as e:  # noqa: BLE001
-        ctx["test"] = f"⚠️ not a reachable Recipe Library: {type(e).__name__}: {str(e)[:120]}"
+        ctx["test"] = f"⚠️ not a reachable Recipe Library: {mirror.explain(e)}"
     return templates.TemplateResponse(request, "partials/mirror.html", ctx)
 
 
