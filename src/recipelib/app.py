@@ -64,6 +64,18 @@ async def lifespan(app: FastAPI):
     from .backup import AutoBackup
     auto_backup = AutoBackup(cfg.auto_backup_days, cfg.backup_keep)
     auto_backup.start()
+    if cfg.llm_enabled and cfg.llm_keep_loaded:
+        import threading
+
+        from .extract.llm import warm_up
+
+        def _warm():
+            import time
+            for _ in range(20):                       # Ollama may still be starting at boot
+                if warm_up(keep=True):
+                    return
+                time.sleep(30)
+        threading.Thread(target=_warm, name="llm-warmup", daemon=True).start()
     app.state.queue = queue
     app.state.printer = printer
     log.info("Recipe Library %s ready on http://%s:%s", __version__, cfg.host, cfg.port)

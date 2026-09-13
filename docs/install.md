@@ -149,6 +149,15 @@ combine two libraries, say the laptop's and the Mac's; tick "let backup win" to 
 backup's version replace matching local recipes. **Replace** wipes the library first and
 puts the backup in its place. A backup from an older version is migrated on the way in.
 
+## Memory and the model
+
+The server loads the model into memory at startup and keeps it there
+(`llm_keep_loaded = true`), so captures never wait for a 5 GB load; the first capture after
+a restart used to stall a small Mac for a minute or two. That costs about 6 GB of RAM while
+the server runs. On a machine that is short of memory set `llm_keep_loaded = false` (the
+model then unloads 30 minutes after the last capture) or use a smaller model:
+`ollama pull qwen3:4b` and `recipes config set ollama_model qwen3:4b`.
+
 ## HTTPS (optional)
 
 Browsers only allow the "keep the screen awake" feature in cook mode on secure pages.

@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     ollama_host: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3:8b"
     llm_enabled: bool = True
+    llm_keep_loaded: bool = True        # warm the model at startup and keep it in memory (faster captures, uses RAM)
 
     @property
     def db_path(self) -> Path:

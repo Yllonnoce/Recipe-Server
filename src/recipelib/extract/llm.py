@@ -84,7 +84,8 @@ def extract_recipe(text: str, title_hint: str | None = None, source: str | None 
             messages.append({"role": "user", "content": f"That JSON was invalid: {last_err}\nReturn corrected JSON only."})
         try:
             kwargs = dict(model=cfg.ollama_model, messages=messages, format=schema,
-                          options={"temperature": 0, "num_ctx": 12288}, keep_alive="30m", stream=False)
+                          options={"temperature": 0, "num_ctx": 12288},
+                          keep_alive=-1 if cfg.llm_keep_loaded else "30m", stream=False)
             try:
                 resp = client.chat(think=False, **kwargs)
             except TypeError:
@@ -117,3 +118,20 @@ def _strip_fences(s: str) -> str:
     s = re.sub(r"^```(?:json)?\s*", "", s)
     s = re.sub(r"\s*```$", "", s)
     return s
+
+
+def warm_up(keep: bool = True) -> bool:
+    """Load the model now (and pin it in memory with keep_alive=-1) so the
+    first capture after a restart doesn't stall the machine. Returns True
+    when the model responded."""
+    cfg = get_settings()
+    if not cfg.llm_enabled:
+        return False
+    try:
+        client = _client()
+        client.generate(model=cfg.ollama_model, prompt="", keep_alive=-1 if keep else "30m")
+        log.info("LLM warmed up: %s is loaded%s", cfg.ollama_model, " and pinned in memory" if keep else "")
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.warning("LLM warm-up skipped: %s: %s", type(e).__name__, str(e)[:120])
+        return False
