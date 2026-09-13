@@ -134,6 +134,54 @@ class Advertiser:
                 pass
             self._zc = None
 
+    def _run_dns_sd(self) -> None:
+        """Keep a `dns-sd -R` process alive for the printer (with the AirPrint
+        subtypes) and another for the web page. mDNSResponder does the
+        multicast, on every interface, with the Mac's own .local name."""
+        import subprocess
+        import sys
+        txt = [f"{k}={v}" for k, v in self.txt.items()]
+        cmds = [["dns-sd", "-R", self.name, "_ipp._tcp,_universal,_print", ".", str(self.port), *txt]]
+        if self.web_port:
+            cmds.append(["dns-sd", "-R", self.name, "_http._tcp", ".", str(self.web_port), "path=/"])
+        procs: list[subprocess.Popen] = []
+        try:
+            for c in cmds:
+                procs.append(subprocess.Popen(c, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL))
+            log.info("mDNS: advertising '%s' on port %d via macOS Bonjour (dns-sd)", self.name, self.port)
+            self.ready.set()
+            while not self._stop.wait(30):
+                for i, pr in enumerate(procs):
+                    if pr.poll() is not None:              # died (e.g. mDNSResponder restarted): start it again
+                        log.warning("mDNS: dns-sd exited (%s); restarting it", pr.returncode)
+                        procs[i] = subprocess.Popen(cmds[i], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        except Exception as e:  # noqa: BLE001
+            self.error = f"{type(e).__name__}: {e}"
+            log.warning("mDNS via dns-sd failed (%s); falling back to zeroconf", self.error)
+            self.ready.set()
+            self._run_zeroconf()
+            return
+        finally:
+            for pr in procs:
+                try:
+                    pr.terminate()
+                except Exception:  # noqa: BLE001
+                    pass
+
+    def _run_zeroconf(self) -> None:
+        try:
+            from zeroconf import Zeroconf
+            self._zc = Zeroconf()
+            self._register()
+        except Exception as e:  # noqa: BLE001
+            self.error = f"{type(e).__name__}: {e}"
+        while not self._stop.wait(60):
+            try:
+                if local_ipv4s() != self._ips:
+                    self._register()
+            except Exception:  # noqa: BLE001
+                pass
+
     def _register(self) -> None:
         from zeroconf import ServiceInfo
         ips = local_ipv4s()

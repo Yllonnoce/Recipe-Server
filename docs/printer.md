@@ -39,6 +39,13 @@ Linux (CUPS): `lpadmin -p RecipeLibrary -E -v ipp://<server-ip>:8631/ipp/print -
 - `recipes serve --dump-ipp ~/ipp-dumps` writes every request a device sends as raw bytes
   plus a readable summary — the way to debug a phone that refuses to print.
 
+## macOS
+
+On a Mac the printer is announced through the system's own Bonjour (`dns-sd`), so it is
+not affected by macOS's Local Network privacy setting, which can silently block background
+programs from sending on the network. The SRV record uses the Mac's own name
+(`macm5.local`).
+
 ## Linux and avahi
 
 python-zeroconf coexists with avahi-daemon in practice. If discovery ever fails on a Linux
