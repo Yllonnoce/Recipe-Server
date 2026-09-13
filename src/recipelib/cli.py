@@ -272,6 +272,42 @@ def _run(cmd: list[str], quiet: bool = False) -> int:
 
 SYSTEM_UNIT = Path("/etc/systemd/system/recipelib.service")
 SYSTEM_PLIST = Path("/Library/LaunchDaemons/com.recipelib.server.plist")
+OLLAMA_PLIST = Path("/Library/LaunchDaemons/com.recipelib.ollama.plist")
+
+
+def _ollama_daemon_macos(user: str, home: Path) -> None:
+    """Ollama installed as the Mac app only runs after login. When the server
+    runs at boot, run Ollama at boot too (as the user, so ~/.ollama models are reused)."""
+    import subprocess
+    import tempfile
+    if subprocess.run(["sudo", "-n", "launchctl", "print", "system/homebrew.mxcl.ollama"], capture_output=True).returncode == 0:
+        return                      # Homebrew's own daemon is already handling it
+    binary = shutil.which("ollama") or next((str(c) for c in (
+        Path("/Applications/Ollama.app/Contents/Resources/ollama"), Path("/usr/local/bin/ollama"),
+        Path("/opt/homebrew/bin/ollama")) if c.exists()), None)
+    if not binary:
+        typer.echo("note: Ollama not found; install it from https://ollama.com and re-run to make it start at boot")
+        return
+    binary = os.path.realpath(binary)
+    plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.recipelib.ollama</string>
+  <key>ProgramArguments</key><array><string>{binary}</string><string>serve</string></array>
+  <key>UserName</key><string>{user}</string>
+  <key>EnvironmentVariables</key><dict><key>HOME</key><string>{home}</string><key>OLLAMA_HOST</key><string>127.0.0.1:11434</string></dict>
+  <key>WorkingDirectory</key><string>{home}</string>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>{home / 'RecipeLibrary/logs/ollama.log'}</string>
+  <key>StandardErrorPath</key><string>{home / 'RecipeLibrary/logs/ollama.log'}</string>
+</dict></plist>
+"""
+    tmp = Path(tempfile.mkstemp(suffix=".plist")[1]); tmp.write_text(plist)
+    _sudo(["launchctl", "bootout", "system/com.recipelib.ollama"])
+    _sudo(["install", "-o", "root", "-g", "wheel", "-m", "644", str(tmp), str(OLLAMA_PLIST)]); tmp.unlink()
+    if _sudo(["launchctl", "bootstrap", "system", str(OLLAMA_PLIST)]) != 0:
+        _sudo(["launchctl", "load", "-w", str(OLLAMA_PLIST)])
+    typer.echo(f"Ollama will start at boot too ({binary}); quit the menu-bar Ollama app to avoid running two copies")
 
 
 def _sudo(cmd: list[str]) -> int:
@@ -333,6 +369,7 @@ WantedBy=multi-user.target
         _sudo(["launchctl", "enable", "system/com.recipelib.server"])
         if _sudo(["launchctl", "bootstrap", "system", str(SYSTEM_PLIST)]) != 0:
             _sudo(["launchctl", "load", "-w", str(SYSTEM_PLIST)])
+        _ollama_daemon_macos(user, home)
         typer.echo(f"installed {SYSTEM_PLIST} (starts at boot, runs as {user}, no login needed)\nstatus: recipes service status")
     else:
         raise typer.Exit("--system is for Linux and macOS; on Windows the scheduled task already starts at logon")
@@ -422,6 +459,9 @@ def service_remove():
     if sys.platform == "darwin" and SYSTEM_PLIST.exists():
         _sudo(["launchctl", "bootout", "system/com.recipelib.server"]); _sudo(["rm", "-f", str(SYSTEM_PLIST)])
         typer.echo("removed the system daemon")
+    if sys.platform == "darwin" and OLLAMA_PLIST.exists():
+        _sudo(["launchctl", "bootout", "system/com.recipelib.ollama"]); _sudo(["rm", "-f", str(OLLAMA_PLIST)])
+        typer.echo("removed the Ollama boot daemon (the Ollama app itself is untouched)")
     if sys.platform.startswith("linux"):
         _run(["systemctl", "--user", "disable", "--now", "recipelib"], quiet=True)
         if sp["unit"].exists():
