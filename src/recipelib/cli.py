@@ -605,6 +605,36 @@ def service_logs(lines: int = 50):
             typer.echo(ln.rstrip())
 
 
+@cli.command("printer-test")
+def printer_test(uri: str | None = typer.Option(None, help="ipp://host:port/ipp/print (default: this machine)"),
+                 file: Path | None = typer.Option(None, help="PDF to send; default is a generated sample")):
+    """Talk to the virtual printer like a client would: attributes, then a Print-Job."""
+    from .ipp import client as IC
+    from .ipp import codec as C
+    cfg = get_settings()
+    uri = uri or f"ipp://127.0.0.1:{cfg.ipp_port}/ipp/print"
+    typer.echo(f"Get-Printer-Attributes {uri}")
+    r = IC.get_printer_attributes(uri, ["printer-name", "printer-uuid", "document-format-supported", "urf-supported", "media-default"])
+    pg = r.group(C.PRINTER_GROUP)
+    for a in pg.attrs:
+        typer.echo(f"  {a.name} = {', '.join(str(v) for v in a.values)}")
+    if file is None:
+        import pymupdf
+        d = pymupdf.open()
+        pg_ = d.new_page()
+        pg_.insert_text((72, 72), "Recipe Library printer test\n2 cups flour\n1 tsp salt", fontsize=14)
+        data = d.tobytes()
+        name = "Printer test page"
+    else:
+        data = file.read_bytes()
+        name = file.stem
+    r = IC.print_job(uri, data, "application/pdf", name=name, user="recipes-cli")
+    jg = r.group(C.JOB_GROUP)
+    typer.echo(f"Print-Job -> status {r.code:#06x}, job-id {jg.get('job-id').value if jg else '?'}, "
+               f"state {jg.get('job-state').value if jg else '?'} (9 = completed)")
+    typer.echo("Check the Add page in the web UI; the job should appear within a few seconds.")
+
+
 @cli.command("service-template")
 def service_template(kind: str = typer.Argument(..., help="systemd | launchd | windows-task | nginx | avahi")):
     """Print a service definition for this machine's paths."""
