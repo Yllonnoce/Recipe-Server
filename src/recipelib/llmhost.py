@@ -123,7 +123,7 @@ def _local_networks() -> list[str]:
 
 def scan_lan(port: int = 11434, timeout: float = 0.4) -> list[dict]:
     """Every host on the local /24 networks that answers on the Ollama port."""
-    targets = [f"{p}.{i}" for p in _local_networks() for i in range(1, 255)]
+    targets = ["127.0.0.1"] + [f"{p}.{i}" for p in _local_networks() for i in range(1, 255)]
 
     def probe(ip: str) -> str | None:
         try:
@@ -136,9 +136,33 @@ def scan_lan(port: int = 11434, timeout: float = 0.4) -> list[dict]:
         for ip in ex.map(probe, targets):
             if ip:
                 info = test_host(f"http://{ip}:{port}", timeout=2.0)
-                try:
-                    name = socket.gethostbyaddr(ip)[0].split(".")[0]
-                except OSError:
-                    name = ""
+                if ip == "127.0.0.1":
+                    name = "this computer"
+                else:
+                    try:
+                        name = socket.gethostbyaddr(ip)[0].split(".")[0]
+                    except OSError:
+                        name = ""
                 found.append({"ip": ip, "name": name, "host": info["host"], "version": info.get("version"), "models": info.get("models", [])})
+    # this computer answered on its LAN address too: one entry is enough
+    mine = {f["ip"] for f in found if f["ip"] != "127.0.0.1"} & set(_local_ips())
+    if mine:
+        found = [f for f in found if f["ip"] != "127.0.0.1"]
+        for f in found:
+            if f["ip"] in mine:
+                f["name"] = (f["name"] + " " if f["name"] else "") + "(this computer)"
     return found
+
+
+def _local_ips() -> set[str]:
+    ips: set[str] = set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ips.add(info[4][0])
+    except OSError:
+        pass
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("10.255.255.255", 1)); ips.add(s.getsockname()[0]); s.close()
+    except OSError:
+        pass
+    return ips

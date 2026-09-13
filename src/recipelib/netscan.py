@@ -58,10 +58,26 @@ def _identify(ip: str, port: int, timeout: float = 2.0) -> Found | None:
         return Found(ip, port, "open", _rdns(ip), "port open", base)
 
 
+def _my_ips() -> set[str]:
+    ips: set[str] = set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ips.add(info[4][0])
+    except OSError:
+        pass
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("10.255.255.255", 1)); ips.add(s.getsockname()[0]); s.close()
+    except OSError:
+        pass
+    return ips
+
+
 def scan(ports: list[int] | None = None, timeout: float = 0.35, networks: list[str] | None = None) -> list[Found]:
     ports = ports or list(KNOWN)
     nets = networks or _local_networks()
-    targets = [(f"{p}.{i}", port) for p in nets for i in range(1, 255) for port in ports]
+    # this computer first (a service bound to 127.0.0.1 only is invisible from the LAN side)
+    targets = [("127.0.0.1", port) for port in ports]
+    targets += [(f"{p}.{i}", port) for p in nets for i in range(1, 255) for port in ports]
 
     def probe(t):
         ip, port = t
@@ -80,8 +96,21 @@ def scan(ports: list[int] | None = None, timeout: float = 0.35, networks: list[s
         found += _mdns_printers(timeout=2.5, seen={(f.ip, f.port) for f in found})
     except Exception:  # noqa: BLE001
         pass
+    # label this computer, and fold a localhost hit into its LAN entry when both answered
+    mine = _my_ips()
+    lan_hits = {(f.port, f.kind) for f in found if f.ip in mine}
+    merged: list[Found] = []
+    for f in found:
+        if f.ip == "127.0.0.1":
+            if (f.port, f.kind) in lan_hits:
+                continue
+            f.name = "this computer (local only)"
+            f.detail += " · listening on 127.0.0.1 only, other machines cannot use it"
+        elif f.ip in mine:
+            f.name = "this computer"
+        merged.append(f)
     order = {"recipe-web": 0, "recipe-printer": 1, "ollama": 2, "web": 3, "open": 4}
-    return sorted(found, key=lambda f: (order[f.kind], f.ip, f.port))
+    return sorted(merged, key=lambda f: (order[f.kind], f.ip != "127.0.0.1", f.ip, f.port))
 
 
 def _mdns_printers(timeout: float, seen: set) -> list[Found]:
