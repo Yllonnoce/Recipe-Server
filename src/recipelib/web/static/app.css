@@ -274,3 +274,12 @@ ol.progress li.failed .dot { background: var(--bad); border-color: var(--bad); }
 @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
 .cover-opt.over .thumb { border-color: var(--accent); background: var(--chip); }
 .cover-opt input[type=url] { font-size: .85em; padding: 3px 6px; margin-top: 4px; }
+
+/* page strip (reorder / rotate / delete PDF pages) */
+.page-strip { display: flex; gap: 12px; overflow-x: auto; padding: 6px 0 10px; }
+.page-card { flex: none; width: 140px; }
+.page-card img { width: 100%; border: 1px solid var(--line); border-radius: 6px; background: #fff; display: block; }
+.page-tools { display: flex; gap: 2px; align-items: center; justify-content: center; margin-top: 4px; }
+.page-tools .n { font-size: .8em; color: var(--muted); margin-right: 4px; }
+.page-tools button { font: inherit; font-size: .8em; padding: 2px 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 5px; cursor: pointer; }
+.page-tools button:disabled { opacity: .3; cursor: default; }

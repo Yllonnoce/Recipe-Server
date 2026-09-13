@@ -43,6 +43,7 @@ class Job:
     processing: int | None = None
     completed: int | None = None
     fmt: str = "application/pdf"
+    reverse: bool = False        # client asked for reverse-order delivery
     impressions: int = 0
     documents: list[Path] = field(default_factory=list)
     created_dt: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -104,6 +105,8 @@ class Printer:
             name = _text(req.value("job-name")) or "Printed recipe"
             user = _text(req.value("requesting-user-name")) or "anonymous"
             job = Job(id=jid, name=name[:200], user=user[:100], printer_uri=self.info.uris[0])
+            pd = str(req.value("page-delivery") or req.value("output-order") or "").lower()
+            job.reverse = "reverse" in pd
             self.jobs[jid] = job
             # keep the table small
             if len(self.jobs) > 200:

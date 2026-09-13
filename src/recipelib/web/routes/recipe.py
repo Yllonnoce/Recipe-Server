@@ -49,7 +49,7 @@ def edit(recipe_id: int, request: Request, s: Session = Depends(get_db)):
     n_pages = min(r.page_count or 1, 3)
     return templates.TemplateResponse(request, "pages/edit.html", {
         "r": r, "ingredients_text": R.ingredients_as_text(r), "steps_text": R.steps_as_text(r),
-        "candidates": candidates, "preview_pages": list(range(n_pages)),
+        "candidates": candidates, "preview_pages": list(range(n_pages)), "all_pages": list(range(r.page_count or 0)),
         "category_names": CATEGORY_NAMES, "categories": [t.name for t in r.tags_of("category")],
         "course": ", ".join(t.name for t in r.tags_of("course")),
         "cuisine": ", ".join(t.name for t in r.tags_of("cuisine")),
@@ -214,3 +214,16 @@ async def _apply_cover(s: Session, r, choice: str, image_url: str, file) -> None
     else:
         return
     R.set_cover_from_png(s, r, png)
+
+
+@router.post("/{recipe_id}/pages", name="recipe_pages")
+def pages(recipe_id: int, request: Request, action: str = Form(...), page: str = Form(""), s: Session = Depends(get_db)):
+    """Reverse / move / rotate / delete pages of the recipe's PDF."""
+    r = _get(s, recipe_id)
+    try:
+        pno = int(page) if page.strip() else None
+    except ValueError:
+        pno = None
+    R.edit_pages(s, r, action, pno)
+    s.commit()
+    return RedirectResponse(str(request.url_for("recipe_edit", recipe_id=r.id)) + "#pages", status_code=303)

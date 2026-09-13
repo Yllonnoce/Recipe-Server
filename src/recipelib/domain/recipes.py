@@ -361,3 +361,69 @@ def upsert_bookmark(s: Session, r: Recipe, page: int, label) -> tuple[Bookmark, 
     if label is not None:
         existing.label = clean_label(label, existing.label)
     return existing, False
+
+
+# ---- page operations --------------------------------------------------------
+
+def edit_pages(s: Session, r: Recipe, action: str, page: int | None = None) -> int:
+    """action: reverse | move_left | move_right | rotate | delete (page is 1-based).
+    Rewrites the PDF, re-extracts its text and thumbnail, keeps everything else.
+    Returns the new page count."""
+    import json as _json
+    from pathlib import Path
+
+    import pymupdf
+
+    from ..capture import pdf as pdfops
+    from ..config import get_settings
+    from ..db.models import Asset
+    cfg = get_settings()
+    if r.pdf_asset is None:
+        raise ValueError("recipe has no PDF")
+    src = cfg.assets_dir / r.pdf_asset.rel_path
+    doc = pymupdf.open(src)
+    n = doc.page_count
+    i = (page or 1) - 1
+    if action == "reverse":
+        doc.select(list(range(n - 1, -1, -1)))
+    elif action == "move_left" and 0 < i < n:
+        order = list(range(n)); order[i - 1], order[i] = order[i], order[i - 1]; doc.select(order)
+    elif action == "move_right" and 0 <= i < n - 1:
+        order = list(range(n)); order[i], order[i + 1] = order[i + 1], order[i]; doc.select(order)
+    elif action == "rotate" and 0 <= i < n:
+        doc[i].set_rotation((doc[i].rotation + 90) % 360)
+    elif action == "delete" and 0 <= i < n and n > 1:
+        doc.delete_page(i)
+    else:
+        doc.close()
+        return n
+    data = doc.tobytes(garbage=3, deflate=True)
+    doc.close()
+    sha = pdfops.sha256_bytes(data)
+    rel = Path("pdf") / sha[:2] / f"{sha}.pdf"
+    dest = cfg.assets_dir / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+    a = s.scalar(select(Asset).where(Asset.sha256 == sha, Asset.kind == "pdf"))
+    if a is None:
+        a = Asset(kind="pdf", rel_path=rel.as_posix(), sha256=sha, bytes=len(data), mime="application/pdf",
+                  page_count=pdfops.page_count(dest))
+        s.add(a)
+        s.flush()
+    r.pdf_asset_id = a.id
+    r.page_count = a.page_count
+    if r.last_page and r.last_page > a.page_count:
+        r.last_page = a.page_count
+    r.bookmarks = [b for b in r.bookmarks if b.page <= a.page_count]
+    # text + thumbnail follow the new page order
+    texts = pdfops.extract_page_texts(dest)
+    if r.text is not None and r.text.text_source == "ocr":
+        old = r.text.pages
+        if action == "reverse" and len(old) == len(texts):
+            texts = list(reversed(old))
+        elif len(old) == len(texts) and action in ("rotate",):
+            texts = old
+    set_text(s, r, texts, r.text.text_source if r.text is not None else "layer")
+    r.thumb_asset_id = store_image(s, pdfops.render_page_png(dest, 0, pdfops.THUMB_WIDTH), "thumb").id
+    touch(s, r)
+    return a.page_count

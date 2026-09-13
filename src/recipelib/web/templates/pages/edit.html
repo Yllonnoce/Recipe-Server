@@ -110,6 +110,29 @@
       <button class="btn primary" type="submit">Save</button>
       <a class="btn" href="{{ request.url_for('recipe_detail', recipe_id=r.id) }}">Cancel</a>
     </div>
+  {% if r.pdf_asset_id and all_pages %}
+  <div class="cover-form" id="pages">
+    <h2>Pages</h2>
+    <p class="muted">Printed in the wrong order, upside down, or with a page you don't want? Fix the PDF here. The text and search index follow the new order.</p>
+    <div class="actions">
+      <button class="btn" type="submit" form="pagesForm" name="action" value="reverse" formaction="{{ request.url_for('recipe_pages', recipe_id=r.id) }}">⇅ Reverse page order</button>
+    </div>
+    <div class="page-strip">
+      {% for pno in all_pages %}
+      <div class="page-card">
+        <img src="{{ request.url_for('recipe_page_image', recipe_id=r.id, page=pno) }}?v={{ r.pdf_asset_id }}" alt="page {{ pno + 1 }}" loading="lazy">
+        <div class="page-tools">
+          <span class="n">{{ pno + 1 }}</span>
+          <button type="submit" form="pagesForm" name="action" value="move_left" formaction="{{ request.url_for('recipe_pages', recipe_id=r.id) }}" onclick="document.getElementById('pageNo').value={{ pno + 1 }}" title="Move earlier" {{ 'disabled' if pno == 0 }}>◀</button>
+          <button type="submit" form="pagesForm" name="action" value="move_right" formaction="{{ request.url_for('recipe_pages', recipe_id=r.id) }}" onclick="document.getElementById('pageNo').value={{ pno + 1 }}" title="Move later" {{ 'disabled' if pno == all_pages|length - 1 }}>▶</button>
+          <button type="submit" form="pagesForm" name="action" value="rotate" formaction="{{ request.url_for('recipe_pages', recipe_id=r.id) }}" onclick="document.getElementById('pageNo').value={{ pno + 1 }}" title="Rotate">⟳</button>
+          <button type="submit" form="pagesForm" name="action" value="delete" formaction="{{ request.url_for('recipe_pages', recipe_id=r.id) }}" onclick="document.getElementById('pageNo').value={{ pno + 1 }}; return confirm('Delete page {{ pno + 1 }} from the PDF?')" title="Delete page" {{ 'disabled' if all_pages|length == 1 }}>✕</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
   <div class="cover-form" id="cover">
     <h2>Photo</h2>
     <p class="muted">The photo on the card and at the top of the recipe. Pick one found in the PDF, use a page as the picture, or upload your own.</p>

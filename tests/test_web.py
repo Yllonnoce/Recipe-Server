@@ -137,6 +137,24 @@ def test_upload_to_library(client, library, tmp_path):
     with session_scope() as s:
         assert len(list(s.scalars(select(Recipe)))) == 1
 
+    # page tools: reverse, rotate, delete
+    assert 'id="pages"' in client.get(f"/recipes/{rid}/edit").text
+    with session_scope() as s:
+        old_asset = s.get(Recipe, rid).pdf_asset_id
+    r = client.post(f"/recipes/{rid}/pages", data={"action": "reverse"}, follow_redirects=False)
+    assert r.status_code == 303
+    with session_scope() as s:
+        rec = s.get(Recipe, rid)
+        assert rec.pdf_asset_id != old_asset and rec.page_count == 2
+        assert rec.text.pages[0].startswith("Page two")            # text follows the new order
+    client.post(f"/recipes/{rid}/pages", data={"action": "rotate", "page": "1"}, follow_redirects=False)
+    client.post(f"/recipes/{rid}/pages", data={"action": "delete", "page": "2"}, follow_redirects=False)
+    with session_scope() as s:
+        rec = s.get(Recipe, rid)
+        assert rec.page_count == 1 and rec.bookmarks == []
+        import pymupdf
+        assert pymupdf.open(library.assets_dir / rec.pdf_asset.rel_path)[0].rotation == 90
+
     # delete hides it
     client.post(f"/recipes/{rid}/delete", follow_redirects=False)
     assert client.get(f"/recipes/{rid}").status_code == 404
