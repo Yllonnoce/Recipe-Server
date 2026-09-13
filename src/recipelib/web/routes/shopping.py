@@ -21,7 +21,8 @@ def _ctx(s: Session) -> dict:
 
 @router.get("/shopping", name="shopping")
 def shopping(request: Request, s: Session = Depends(get_db)):
-    return templates.TemplateResponse(request, "pages/shopping.html", _ctx(s))
+    from datetime import date
+    return templates.TemplateResponse(request, "pages/shopping.html", {**_ctx(s), "today": date.today().strftime("%A %b %-d")})
 
 
 @router.get("/shopping.txt", name="shopping_text")

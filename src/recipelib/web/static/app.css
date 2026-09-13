@@ -291,3 +291,20 @@ ol.progress li.failed .dot { background: var(--bad); border-color: var(--bad); }
 .update-banner form { margin: 0; }
 .update-banner .dismiss { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 1em; }
 .htmx-indicator { display: none; } .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline; }
+
+/* printing the shopping list */
+.print-only { display: none; }
+@media print {
+  header.top, .update-banner, .shop form.add, .shop .plan-head .btn, .shop .row .x, .shop .row .from, .fab,
+  #list > .muted, .shop .row.checked { display: none !important; }
+  .print-only { display: inline; }
+  body { background: #fff; color: #000; font-size: 12pt; }
+  .wrap { padding: 0; max-width: none; }
+  .shop { max-width: none; columns: 2; column-gap: 28pt; }
+  .shop h1 { column-span: all; font-size: 18pt; margin: 0 0 8pt; }
+  .shop .group { break-inside: avoid; }
+  .shop .group h3 { margin: 10pt 0 2pt; font-size: 10pt; letter-spacing: .08em; color: #000; border-bottom: 1px solid #000; }
+  .shop .row { padding: 3pt 0; border-bottom: 1px dotted #999; font-size: 11pt; gap: 6pt; }
+  .shop .row .box { width: 10pt; height: 10pt; border: 1px solid #000; border-radius: 2pt; }
+  a { text-decoration: none; color: #000; }
+}

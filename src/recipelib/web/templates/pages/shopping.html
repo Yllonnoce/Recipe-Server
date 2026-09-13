@@ -20,8 +20,9 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
 {% block content %}
 <div class="shop">
   <div class="plan-head">
-    <h1>Shopping list</h1>
+    <h1>Shopping list <span class="print-only muted" style="font-size:.6em;font-weight:400">{{ today }}</span></h1>
     <button class="btn" id="shareBtn" type="button" title="Send the list to Google Keep, Notes, Messages…">📤 Share</button>
+    <button class="btn" type="button" onclick="window.print()" title="Print the list">🖨 Print</button>
     <a class="btn" href="{{ request.url_for('shopping_text') }}" target="_blank" title="Plain text, one item per line">Text</a>
   </div>
   <form class="add" hx-post="{{ request.url_for('shopping_add_item') }}" hx-target="#list" hx-on::after-request="this.reset()">
