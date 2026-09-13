@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -17,8 +17,9 @@ router = APIRouter()
 def settings(request: Request, s: Session = Depends(get_db)):
     from ...doctor import run_checks
     from ... import updater
+    from ... import backup as B
     return templates.TemplateResponse(request, "pages/settings.html", {
-        "ver": updater.current(), "upd": updater.STATE,
+        "ver": updater.current(), "upd": updater.STATE, "backups": B.list_backups(), "bk": B.STATE,
         "cfg": get_settings(), "config_path": config_path(), "version": __version__,
         "checks": run_checks(quick=True), "message": request.query_params.get("m"),
         "printer": getattr(request.app.state, "printer", None), "host": request.url.hostname,
@@ -64,3 +65,62 @@ def update_run(request: Request):
     if not updater.STATE.get("updating"):
         threading.Thread(target=updater.update, kwargs={"restart": True}, name="updater", daemon=True).start()
     return RedirectResponse(str(request.url_for("settings")) + "?m=Updating… the server restarts itself when done; reload this page in a minute", status_code=303)
+
+
+# ---- backups ---------------------------------------------------------------
+
+@router.post("/settings/backup", name="settings_backup")
+def backup_create(request: Request):
+    from ... import backup as B
+    p = B.create_backup()
+    return RedirectResponse(str(request.url_for("settings")) + f"?m=Backup written: {p.name}#backups", status_code=303)
+
+
+@router.get("/settings/backups/{name}", name="settings_backup_download")
+def backup_download(name: str):
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+    from ... import backup as B
+    p = B.backups_dir() / name
+    if "/" in name or not name.endswith(".zip") or not p.is_file():
+        raise HTTPException(404)
+    return FileResponse(p, media_type="application/zip", filename=name)
+
+
+@router.post("/settings/backups/{name}/delete", name="settings_backup_delete")
+def backup_delete(name: str, request: Request):
+    from ... import backup as B
+    p = B.backups_dir() / name
+    if "/" not in name and name.endswith(".zip") and p.is_file():
+        p.unlink()
+    return RedirectResponse(str(request.url_for("settings")) + "?m=Backup deleted#backups", status_code=303)
+
+
+@router.post("/settings/backups/{name}/restore", name="settings_backup_restore")
+def backup_restore(name: str, request: Request, mode: str = Form("merge"), overwrite: str = Form("0")):
+    from fastapi import HTTPException
+    from ... import backup as B
+    p = B.backups_dir() / name
+    if "/" in name or not p.is_file():
+        raise HTTPException(404)
+    try:
+        stats = B.restore(p, mode="replace" if mode == "replace" else "merge", overwrite=overwrite == "1")
+        msg = ("Replaced the library from " if mode == "replace" else "Merged ") + name + ": " + stats.summary()
+    except Exception as e:  # noqa: BLE001
+        msg = f"Restore failed: {type(e).__name__}: {e}"
+    return RedirectResponse(str(request.url_for("settings")) + "?m=" + msg + "#backups", status_code=303)
+
+
+@router.post("/settings/backups/upload", name="settings_backup_upload")
+async def backup_upload(request: Request, file: UploadFile = File(...)):
+    """Save an uploaded backup zip into the backups folder (restore it from the list)."""
+    import re
+    from ... import backup as B
+    name = re.sub(r"[^\w.-]", "_", file.filename or "upload.zip")
+    if not name.endswith(".zip"):
+        name += ".zip"
+    dest = B.backups_dir() / name
+    with dest.open("wb") as fh:
+        while chunk := await file.read(1 << 20):
+            fh.write(chunk)
+    return RedirectResponse(str(request.url_for("settings")) + f"?m=Uploaded {name}; choose Merge or Replace below#backups", status_code=303)

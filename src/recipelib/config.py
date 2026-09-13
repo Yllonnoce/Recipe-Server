@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     log_level: str = "info"
+    auto_backup_days: float = 1.0       # 0 turns automatic backups off
+    backup_keep: int = 7                # newest zips to keep in RecipeLibrary/backups
     ssl_certfile: Path | None = None    # set both to serve https (needed for the tablet wake lock)
     ssl_keyfile: Path | None = None
 

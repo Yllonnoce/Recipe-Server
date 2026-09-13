@@ -236,3 +236,7 @@ details.facet > summary h4 .sel { text-transform: none; letter-spacing: 0; color
 @media (max-width: 900px) { details.facet { width: 100%; } }
 header.top nav .upd { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 1px 8px; font-size: .7em; vertical-align: middle; }
 pre.log { background: var(--chip); padding: 10px; border-radius: 8px; font-size: .8em; white-space: pre-wrap; max-height: 260px; overflow: auto; }
+table.backups th { font-weight: 600; }
+table.backups .bk-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+table.backups .bk-actions form { display: inline-flex; gap: 6px; align-items: center; }
+table.backups .bk-actions label.check { font-size: .8em; }

@@ -45,6 +45,32 @@
     {% if upd.last_log %}<pre class="log">{{ upd.last_log }}</pre>{% endif %}
     {% if not ver.is_git %}<p class="muted">Updates need the app to be installed from a git clone (<code>git clone &lt;url&gt;</code> then <code>./install.sh</code>).</p>{% endif %}
   </section>
+  <section class="panel" id="backups">
+    <h2>Backups</h2>
+    <p class="muted">A backup is one zip with the database and every PDF and picture. One is made automatically every {{ cfg.auto_backup_days|int if cfg.auto_backup_days == cfg.auto_backup_days|int else cfg.auto_backup_days }} day(s), keeping the newest {{ cfg.backup_keep }}, in <code>{{ cfg.library_dir }}/backups</code>. Copy them somewhere else too.</p>
+    <div class="actions">
+      <form method="post" action="{{ request.url_for('settings_backup') }}"><button class="btn primary">Create backup now</button></form>
+      <form method="post" action="{{ request.url_for('settings_backup_upload') }}" enctype="multipart/form-data" class="inline-form">
+        <input type="file" name="file" accept=".zip" required style="width:auto"><button class="btn">Upload a backup</button>
+      </form>
+    </div>
+    {% if backups %}
+    <table class="kv backups">
+      {% for b in backups %}
+      <tr>
+        <th><a href="{{ request.url_for('settings_backup_download', name=b.name) }}">{{ b.name }}</a><br><small class="muted">{{ b.mtime.strftime('%b %-d, %Y %H:%M') }} · {{ (b.bytes / 1048576)|round(1) }} MB{% if b.recipes is not none %} · {{ b.recipes }} recipes{% endif %}{% if b.version %} · v{{ b.version }}{% endif %}</small></th>
+        <td class="bk-actions">
+          <form method="post" action="{{ request.url_for('settings_backup_restore', name=b.name) }}" onsubmit="return confirm('Merge this backup into the library? Recipes you already have are kept.')">
+            <input type="hidden" name="mode" value="merge"><label class="check"><input type="checkbox" name="overwrite" value="1"> let backup win</label><button class="btn small">Merge</button></form>
+          <form method="post" action="{{ request.url_for('settings_backup_restore', name=b.name) }}" onsubmit="return confirm('REPLACE the whole library with this backup? Everything currently in it is deleted first.')">
+            <input type="hidden" name="mode" value="replace"><button class="btn small danger">Replace library</button></form>
+          <form method="post" action="{{ request.url_for('settings_backup_delete', name=b.name) }}" onsubmit="return confirm('Delete this backup file?')"><button class="btn small">Delete</button></form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="muted">No backups yet.</p>{% endif %}
+  </section>
   <section class="panel">
     <h2>Maintenance</h2>
     <form method="post" action="{{ request.url_for('settings_reindex') }}"><button class="btn">Rebuild search index</button></form>

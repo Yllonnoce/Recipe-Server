@@ -158,58 +158,31 @@ def version():
 
 
 @cli.command()
-def backup(out: Path | None = None):
-    """Zip the database and assets into the backups folder."""
-    import sqlite3
-    import zipfile
-    from datetime import datetime
+def backup(out: Path | None = typer.Option(None, help="zip path (default: RecipeLibrary/backups/recipelib-<date>.zip)"),
+           no_assets: bool = typer.Option(False, "--no-assets", help="database only, no PDFs/images")):
+    """Zip the database and all PDFs/images."""
+    from .backup import create_backup
     cfg = get_settings()
     cfg.ensure_dirs()
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    out = out or (cfg.library_dir / "backups" / f"recipelib-{stamp}.zip")
-    snap = cfg.library_dir / "tmp" / f"recipes-{stamp}.db"
-    src = sqlite3.connect(str(cfg.db_path))
-    dst = sqlite3.connect(str(snap))
-    src.backup(dst)
-    dst.close()
-    src.close()
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(snap, "recipes.db")
-        for f in cfg.assets_dir.rglob("*"):
-            if f.is_file():
-                z.write(f, Path("assets") / f.relative_to(cfg.assets_dir))
-    snap.unlink(missing_ok=True)
-    typer.echo(f"wrote {out}")
+    p = create_backup(out, include_assets=not no_assets)
+    typer.echo(f"wrote {p} ({p.stat().st_size // 1024 // 1024} MB)")
 
 
-@cli.command("printer-test")
-def printer_test(uri: str | None = typer.Option(None, help="ipp://host:port/ipp/print (default: this machine)"),
-                 file: Path | None = typer.Option(None, help="PDF to send; default is a generated sample")):
-    """Talk to the virtual printer like a client would: attributes, then a Print-Job."""
-    from .ipp import client as IC
-    from .ipp import codec as C
+@cli.command()
+def restore(zip_path: Path, replace: bool = typer.Option(False, help="wipe the library first instead of merging"),
+            overwrite: bool = typer.Option(False, help="when merging, let backup recipes replace matching local ones")):
+    """Merge a backup into the library (or replace the library with it)."""
+    from .backup import restore as do_restore
+    from .db.engine import init_engine
+    from .db.migrate import migrate
     cfg = get_settings()
-    uri = uri or f"ipp://127.0.0.1:{cfg.ipp_port}/ipp/print"
-    typer.echo(f"Get-Printer-Attributes {uri}")
-    r = IC.get_printer_attributes(uri, ["printer-name", "printer-uuid", "document-format-supported", "urf-supported", "media-default"])
-    pg = r.group(C.PRINTER_GROUP)
-    for a in pg.attrs:
-        typer.echo(f"  {a.name} = {', '.join(str(v) for v in a.values)}")
-    if file is None:
-        import pymupdf
-        d = pymupdf.open()
-        pg_ = d.new_page()
-        pg_.insert_text((72, 72), "Recipe Library printer test\n2 cups flour\n1 tsp salt", fontsize=14)
-        data = d.tobytes()
-        name = "Printer test page"
-    else:
-        data = file.read_bytes()
-        name = file.stem
-    r = IC.print_job(uri, data, "application/pdf", name=name, user="recipes-cli")
-    jg = r.group(C.JOB_GROUP)
-    typer.echo(f"Print-Job -> status {r.code:#06x}, job-id {jg.get('job-id').value if jg else '?'}, "
-               f"state {jg.get('job-state').value if jg else '?'} (9 = completed)")
-    typer.echo("Check the Add page in the web UI; the job should appear within a few seconds.")
+    cfg.ensure_dirs()
+    migrate(cfg.db_path)
+    init_engine(cfg.db_path)
+    if replace and not typer.confirm("This deletes every recipe currently in the library first. Continue?"):
+        raise typer.Abort()
+    stats = do_restore(zip_path, mode="replace" if replace else "merge", overwrite=overwrite)
+    typer.echo(stats.summary())
 
 
 config_cli = typer.Typer(help="Read or change the config file.")

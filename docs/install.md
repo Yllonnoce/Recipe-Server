@@ -134,10 +134,20 @@ To remove: Linux `systemctl --user disable --now recipelib`; macOS
 remove the service, firewall rules, environment and config; add `--purge` / `/purge` to
 also delete the library. Your recipes otherwise stay in `~/RecipeLibrary`.
 
-## Backups
+## Backups and restore
 
-`recipes backup` writes a zip of the database and all PDFs to `~/RecipeLibrary/backups`.
-Restoring is unzipping it into a fresh library folder.
+A backup is one zip with the database and every PDF and picture. The server makes one
+automatically every day and keeps the newest seven in `~/RecipeLibrary/backups`
+(`auto_backup_days` and `backup_keep` in the config). Copy them somewhere else as well.
+
+- Settings page → Backups: create, download, upload, and restore.
+- `recipes backup` / `recipes restore <zip>`.
+
+Restore has two modes. **Merge** adds recipes the library doesn't have (matched by the
+PDF's fingerprint or the source URL) and keeps everything else, so it is also how you
+combine two libraries, say the laptop's and the Mac's; tick "let backup win" to have the
+backup's version replace matching local recipes. **Replace** wipes the library first and
+puts the backup in its place. A backup from an older version is migrated on the way in.
 
 ## HTTPS (optional)
 

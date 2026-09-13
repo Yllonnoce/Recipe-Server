@@ -61,6 +61,9 @@ async def lifespan(app: FastAPI):
     from .updater import Checker
     checker = Checker()
     checker.start()
+    from .backup import AutoBackup
+    auto_backup = AutoBackup(cfg.auto_backup_days, cfg.backup_keep)
+    auto_backup.start()
     app.state.queue = queue
     app.state.printer = printer
     log.info("Recipe Library %s ready on http://%s:%s", __version__, cfg.host, cfg.port)
@@ -68,6 +71,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         checker.stop()
+        auto_backup.stop()
         if printer is not None:
             printer.stop()
         watcher.stop()
