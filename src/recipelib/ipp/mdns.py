@@ -94,6 +94,8 @@ class Advertiser:
             self._thread.join(timeout=8)
 
     def _run(self) -> None:
+        import logging as _logging
+        _logging.getLogger("zeroconf").setLevel(_logging.CRITICAL)   # its sendto tracebacks while Wi-Fi comes up are noise
         try:
             from zeroconf import Zeroconf
             self._zc = Zeroconf()

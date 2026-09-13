@@ -3,6 +3,7 @@
 #
 #   ./install.sh                 install into ./.venv, set up config + library, pull model
 #   ./install.sh --service       ...and start at login (systemd user unit / launchd agent)
+#   ./install.sh --system        ...and start at boot with no login (system service, asks for sudo)
 #   ./install.sh --no-model      skip the Ollama model download
 #   ./install.sh --no-browser    skip the Chromium download (URL capture disabled until you run it)
 #   ./install.sh --nginx         put nginx in front on port 80 (large uploads, long timeouts); needs sudo
@@ -16,16 +17,17 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
 OS="$(uname -s)"
-SERVICE=0; MODEL=1; BROWSER=1; NGINX=0; FIREWALL=1; FIREWALL_ONLY=0
+SERVICE=0; SYSTEM=0; MODEL=1; BROWSER=1; NGINX=0; FIREWALL=1; FIREWALL_ONLY=0
 for a in "$@"; do
   case "$a" in
     --service) SERVICE=1 ;;
+    --system) SERVICE=1; SYSTEM=1 ;;
     --no-model) MODEL=0 ;;
     --no-browser) BROWSER=0 ;;
     --nginx) NGINX=1 ;;
     --no-firewall) FIREWALL=0 ;;
     --firewall-only) FIREWALL_ONLY=1 ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) echo "unknown option: $a" >&2; exit 2 ;;
   esac
 done
@@ -189,8 +191,13 @@ fi
 
 # ---------------------------------------------------------------- service
 if [ "$SERVICE" = 1 ]; then
-  say "Installing the background service (starts at login)"
-  "$HERE/.venv/bin/recipes" service install
+  if [ "$SYSTEM" = 1 ]; then
+    say "Installing the system service (starts at boot, no login needed; asks for your password)"
+    "$HERE/.venv/bin/recipes" service install --system
+  else
+    say "Installing the background service (starts at login)"
+    "$HERE/.venv/bin/recipes" service install
+  fi
 fi
 
 # ---------------------------------------------------------------- done
