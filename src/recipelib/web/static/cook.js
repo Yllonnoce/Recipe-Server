@@ -26,9 +26,12 @@
       if (i.group !== group) { group = i.group; if (group) { const h = document.createElement('h3'); h.textContent = group; box.appendChild(h); } }
       const row = document.createElement('div');
       row.className = 'item' + (state.ing[i.id] ? ' done' : '');
-      const q = i.quantity != null ? fmt(i.quantity * state.factor, i.unit) : '';
-      const qm = i.quantity_max != null ? '–' + fmt(i.quantity_max * state.factor, i.unit) : '';
-      const unit = i.unit_raw || '';
+      const target = window.rlUnits.get();
+      const a = i.quantity != null ? window.rlConvert(i.quantity * state.factor, i.unit, target) : { q: null, label: null };
+      const q = a.q != null ? fmt(a.q, a.unit) : '';
+      let qm = '';
+      if (i.quantity_max != null) { const b = window.rlConvert(i.quantity_max * state.factor, i.unit, target); qm = '–' + fmt(b.q, b.unit); }
+      const unit = a.label != null ? a.label : (i.unit_raw || '');
       row.innerHTML = '<span class="box">' + (state.ing[i.id] ? '✓' : '') + '</span><span><span class="q">' + q + qm + (unit ? ' ' + unit : '') + '</span>' +
         escapeHtml(i.name) + (i.preparation ? '<span class="prep">, ' + escapeHtml(i.preparation) + '</span>' : '') + (i.optional ? ' <em>(optional)</em>' : '') + '</span>';
       row.addEventListener('click', () => { state.ing[i.id] = !state.ing[i.id]; save(); renderIngredients(); });
@@ -47,7 +50,7 @@
       const done = !!state.steps[s.id];
       row.className = 'step' + (done ? ' done' : '') + (!done && !currentSet ? ' current' : '');
       if (!done) currentSet = true;
-      row.innerHTML = '<span class="n">' + n + '</span><div class="body">' + escapeHtml(s.text) +
+      row.innerHTML = '<span class="n">' + n + '</span><div class="body">' + escapeHtml(window.rlTemp(s.text, window.rlUnits.get())) +
         (s.minutes ? '<br><button class="timer" type="button">⏱ Start ' + s.minutes + ' min timer</button>' : '') + '</div>';
       row.addEventListener('click', (e) => {
         if (e.target.classList.contains('timer')) { e.stopPropagation(); startTimer(s.minutes * 60, 'Step ' + n); return; }
@@ -145,6 +148,7 @@
     document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
     document.querySelectorAll('.pane').forEach((p) => p.classList.toggle('on', p.id === b.dataset.tab));
   }));
+  window.rlUnits.control($('units'), () => render());
   function applyFont() { document.body.dataset.font = String(state.font || 1); }
   function render() { $('srvLabel').textContent = servingsLabel(); renderIngredients(); renderSteps(); }
   applyFont();

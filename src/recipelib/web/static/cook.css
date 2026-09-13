@@ -41,3 +41,5 @@ body.cook[data-font="2"] { --f: 1.2; } body.cook[data-font="3"] { --f: 1.45; } b
   .cookbar h1 { font-size: 1em; }
   .cookbar #btnReset, .cookbar #fontMinus { display: none; }
 }
+.cookbar .units { font-size: .75em; } .cookbar .units button { padding: 4px 8px; }
+@media (max-width: 800px) { .cookbar .units button[data-u=original] { display: none; } }

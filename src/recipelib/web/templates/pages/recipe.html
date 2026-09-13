@@ -29,6 +29,7 @@
           <button class="reset" type="button" title="Back to the original amounts">reset</button>
         </span>
         {% if r.yield_text %}<span class="muted">{{ r.yield_text }}</span>{% endif %}
+        <span class="units" id="units" title="Show amounts in"><button type="button" data-u="original">as written</button><button type="button" data-u="us">US</button><button type="button" data-u="metric">metric</button></span>
         {% elif r.servings or r.yield_text %}<span>🍽 {{ r.yield_text or (r.servings|int if r.servings == r.servings|int else r.servings) ~ ' servings' }}</span>{% endif %}
         {% if r.prep_min %}<span>Prep {{ r.prep_min|mins }}</span>{% endif %}
         {% if r.cook_min %}<span>Cook {{ r.cook_min|mins }}</span>{% endif %}
@@ -75,7 +76,7 @@
         {% if group %}<h3>{{ group }}</h3>{% endif %}
         <ul>
         {% for i in items %}
-          <li><span class="q"><span data-q="{{ i.quantity if i.quantity is not none else '' }}"{% if i.quantity_max %} data-qmax="{{ i.quantity_max }}"{% endif %} data-unit="{{ i.unit or '' }}">{{ i.quantity|qty(i.unit) }}{% if i.quantity_max %}–{{ i.quantity_max|qty(i.unit) }}{% endif %}</span> {{ i.unit_raw or '' }}</span> {{ i.name }}{% if i.preparation %}<span class="prep">, {{ i.preparation }}</span>{% endif %}{% if i.optional %} <em>(optional)</em>{% endif %}</li>
+          <li><span class="q"><span data-q="{{ i.quantity if i.quantity is not none else '' }}"{% if i.quantity_max %} data-qmax="{{ i.quantity_max }}"{% endif %} data-unit="{{ i.unit or '' }}">{{ i.quantity|qty(i.unit) }}{% if i.quantity_max %}–{{ i.quantity_max|qty(i.unit) }}{% endif %}</span> <span class="u" data-raw="{{ i.unit_raw or '' }}">{{ i.unit_raw or '' }}</span></span> {{ i.name }}{% if i.preparation %}<span class="prep">, {{ i.preparation }}</span>{% endif %}{% if i.optional %} <em>(optional)</em>{% endif %}</li>
         {% endfor %}
         </ul>
       {% endfor %}
@@ -85,7 +86,7 @@
       {% for group, items in r.step_groups() %}
         {% if group %}<h3>{{ group }}</h3>{% endif %}
         <ol>
-        {% for st in items %}<li>{{ st.text }}</li>{% endfor %}
+        {% for st in items %}<li data-text="{{ st.text }}">{{ st.text }}</li>{% endfor %}
         </ol>
       {% endfor %}
     </section>
