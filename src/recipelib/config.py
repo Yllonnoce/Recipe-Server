@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "info"
     auto_backup_days: float = 1.0       # 0 turns automatic backups off
+    push_to: str = ""                   # main server: address of the backup server to send backups to
+    push_interval_hours: float = 24.0   # how often to send (0 = manual only)
+    push_mode: str = "merge"            # what the backup server does with it: merge | replace
+    sync_token: str = ""                # optional shared secret; a receiver with a token only accepts senders that know it
     mirror_of: str = ""                 # backup server: address of the primary Recipe Library to copy from
     mirror_interval_hours: float = 24.0 # how often to pull from it (0 = manual only)
     mirror_mode: str = "merge"          # merge (add/update from the primary, keep local extras) | replace (exact copy)

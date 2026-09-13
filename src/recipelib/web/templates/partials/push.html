@@ -1,0 +1,25 @@
+<div id="push" {% if push.running %}hx-get="{{ request.url_for('push_partial') }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <form hx-post="{{ request.url_for('settings_push_save') }}" hx-target="#push" hx-swap="outerHTML" class="stack">
+    <div class="row">
+      <label>Backup server address <input name="push_to" value="{{ cfg.push_to }}" placeholder="http://ubuntu.local:8000  (empty = don't send)"></label>
+      <label>Every (hours) <input name="push_interval_hours" value="{{ cfg.push_interval_hours|int if cfg.push_interval_hours == cfg.push_interval_hours|int else cfg.push_interval_hours }}" inputmode="decimal"></label>
+      <label>The backup server should <select name="push_mode"><option value="merge" {{ 'selected' if cfg.push_mode != 'replace' }}>merge it in (keep its own extras)</option><option value="replace" {{ 'selected' if cfg.push_mode == 'replace' }}>become an exact copy</option></select></label>
+      <label>Shared token <small>(optional; set the same on both servers)</small> <input name="sync_token" value="{{ cfg.sync_token }}" placeholder="any secret word"></label>
+    </div>
+    <div class="actions">
+      <button class="btn primary" type="submit">Save</button>
+      <button class="btn" type="button" hx-post="{{ request.url_for('settings_push_test') }}" hx-include="closest form" hx-target="#push" hx-swap="outerHTML">Test</button>
+      <button class="btn" type="button" hx-post="{{ request.url_for('settings_push_send') }}" hx-target="#push" hx-swap="outerHTML" {{ 'disabled' if push.running or not cfg.push_to }}>Send now</button>
+      {% if saved %}<span class="muted">saved</span>{% endif %}
+    </div>
+  </form>
+  <table class="kv">
+    {% if test %}<tr><th>Test</th><td>{{ test }}</td></tr>{% endif %}
+    <tr><th>Status</th><td>
+      {% if push.running %}<span class="spin"></span> sending to {{ push.target }}…
+      {% elif push.result %}{{ '✅' if push.last_ok else '⚠️' }} {{ push.result }}
+      {% elif cfg.push_to %}nothing sent yet (first send a few minutes after startup, then every {{ cfg.push_interval_hours|int }} h)
+      {% else %}off{% endif %}
+    </td></tr>
+  </table>
+</div>

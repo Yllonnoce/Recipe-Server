@@ -17,6 +17,7 @@ from .config import get_settings
 
 log = logging.getLogger(__name__)
 STATE = {"running": False, "last_run": None, "last_ok": None, "result": "", "source": None}
+PUSH = {"running": False, "last_run": None, "last_ok": None, "result": "", "target": None}
 
 
 def normalize_url(u: str) -> str:
@@ -157,6 +158,86 @@ class Mirror:
             if time.time() - last >= self.every:
                 try:
                     sync_once()
+                except Exception:  # noqa: BLE001
+                    pass
+            self._stop.wait(1800)
+
+
+# ---------------------------------------------------------------- push (main server -> backup server)
+
+def push_once(url: str | None = None, mode: str | None = None) -> str:
+    """Make a fresh backup and send it to the backup server, which merges it in."""
+    import httpx
+
+    from . import backup as B
+    cfg = get_settings()
+    url = resolve_url(url or cfg.push_to)
+    mode = mode or cfg.push_mode
+    if not url:
+        raise ValueError("no backup server configured (push_to)")
+    PUSH.update(running=True, target=url)
+    try:
+        primary_info(url)                                  # must be a Recipe Library
+        zip_path = B.create_backup()
+        headers = {"X-Recipelib-Token": cfg.sync_token} if cfg.sync_token else {}
+        with zip_path.open("rb") as fh:
+            r = httpx.post(url + "/api/backup/receive", files={"file": (zip_path.name, fh, "application/zip")},
+                           data={"mode": mode}, headers=headers, timeout=1800)
+        if r.status_code == 403:
+            raise PermissionError("the backup server refused: its sync_token does not match ours")
+        r.raise_for_status()
+        summary = r.json().get("summary", "")
+        msg = f"{datetime.now():%b %d %H:%M}: sent {zip_path.name} ({zip_path.stat().st_size // 1048576} MB) to {url}: {summary}"
+        PUSH.update(last_ok=True, result=msg, last_run=time.time())
+        log.info("push: %s", msg)
+        return msg
+    except Exception as e:  # noqa: BLE001
+        msg = f"{datetime.now():%b %d %H:%M}: sending to {url} failed: {explain(e)}"
+        PUSH.update(last_ok=False, result=msg, last_run=time.time())
+        log.warning("push: %s", msg)
+        raise
+    finally:
+        PUSH["running"] = False
+
+
+def push_async() -> bool:
+    if PUSH["running"]:
+        return False
+
+    def run():
+        try:
+            push_once()
+        except Exception:  # noqa: BLE001
+            pass
+    threading.Thread(target=run, name="backup-push", daemon=True).start()
+    return True
+
+
+class Pusher:
+    """Scheduled send to the backup server (push_interval_hours; 0 = manual only)."""
+
+    def __init__(self, url: str, interval_hours: float):
+        self.url = url
+        self.every = interval_hours * 3600
+        self._stop = threading.Event()
+        self._t: threading.Thread | None = None
+
+    def start(self) -> None:
+        if not self.url or self.every <= 0:
+            return
+        self._t = threading.Thread(target=self._run, name="backup-push-timer", daemon=True)
+        self._t.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _run(self) -> None:
+        self._stop.wait(240)
+        while not self._stop.is_set():
+            last = PUSH.get("last_run") or 0
+            if time.time() - last >= self.every:
+                try:
+                    push_once()
                 except Exception:  # noqa: BLE001
                     pass
             self._stop.wait(1800)

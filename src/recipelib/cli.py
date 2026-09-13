@@ -182,6 +182,24 @@ def scan(port: list[int] = typer.Option(None, "--port", "-p", help="port(s) to l
         typer.echo(f"{f.label:<24} {f.ip:<15} {f.name:<14} {f.url}  {f.detail}{extra}")
 
 
+@cli.command("push-to")
+def push_to(url: str = typer.Argument(None, help="the backup server, e.g. http://ubuntu.local:8000 (default: push_to from the config)"),
+            replace: bool = typer.Option(False, help="make the backup server an exact copy instead of merging")):
+    """Send a fresh backup of this library to a backup server (main server side)."""
+    from .db.engine import init_engine
+    from .db.migrate import migrate
+    from .mirror import push_once
+    cfg = get_settings()
+    cfg.ensure_dirs()
+    migrate(cfg.db_path)
+    init_engine(cfg.db_path)
+    try:
+        typer.echo(push_once(url, "replace" if replace else "merge"))
+    except Exception as e:  # noqa: BLE001
+        typer.echo(f"!! {type(e).__name__}: {e}")
+        raise typer.Exit(code=1)
+
+
 @cli.command("sync-from")
 def sync_from(url: str = typer.Argument(None, help="the main server, e.g. http://macm5.local (default: mirror_of from the config)"),
               replace: bool = typer.Option(False, help="exact copy instead of merge")):

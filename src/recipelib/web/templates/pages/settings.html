@@ -47,8 +47,13 @@
   </section>
   <section class="panel wide" id="mirror-panel">
     <h2>Backup server</h2>
-    <p class="muted">Make this Recipe Library a standing copy of another one: it pulls a fresh backup from the main server on a schedule and merges it in (the main server's version wins). If the main server ever dies, this one already has every recipe, PDF and picture. Leave the address empty on the main server itself.</p>
-    <div hx-get="{{ request.url_for('mirror_partial') }}" hx-trigger="load" hx-swap="outerHTML"><span class="spin"></span></div>
+    <p class="muted"><strong>On the main server:</strong> enter the backup server's address below and this library is sent to it on a schedule; the backup server merges it in, so if this machine ever dies the backup has every recipe, PDF and picture. The backup server needs nothing configured; it just has to be a Recipe Library that is switched on.</p>
+    <div hx-get="{{ request.url_for('push_partial') }}" hx-trigger="load" hx-swap="outerHTML"><span class="spin"></span></div>
+    <details style="margin-top:14px">
+      <summary class="muted" style="cursor:pointer">The other way round: make <em>this</em> machine copy <em>from</em> a main server on its own</summary>
+      <p class="muted">Useful when the backup machine can reach the main server but not the reverse. Leave it empty otherwise.</p>
+      <div hx-get="{{ request.url_for('mirror_partial') }}" hx-trigger="load" hx-swap="outerHTML"><span class="spin"></span></div>
+    </details>
   </section>
   <section class="panel wide" id="backups">
     <h2>Backups</h2>

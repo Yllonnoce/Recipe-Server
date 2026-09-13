@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
@@ -333,3 +334,81 @@ def mirror_sync(request: Request):
     import time
     time.sleep(0.3)
     return templates.TemplateResponse(request, "partials/mirror.html", _mirror_ctx())
+
+
+@router.post("/api/backup/receive", name="api_backup_receive")
+async def api_backup_receive(request: Request, file: UploadFile = File(...), mode: str = Form("merge")):
+    """A main server sends us a backup; merge it in (its version wins) or replace."""
+    import re as _re
+
+    from fastapi import HTTPException
+    from fastapi.responses import JSONResponse
+    from starlette.concurrency import run_in_threadpool
+
+    from ... import backup as B
+    from ... import mirror
+    cfg = get_settings()
+    if cfg.sync_token and request.headers.get("X-Recipelib-Token", "") != cfg.sync_token:
+        raise HTTPException(403, "sync_token mismatch")
+    sender = request.client.host if request.client else "unknown"
+    name = f"received-{_re.sub(r'[^0-9A-Za-z.]', '_', sender)}-{time.strftime('%Y%m%d-%H%M%S')}.zip"
+    dest = B.backups_dir() / name
+    with dest.open("wb") as fh:
+        while chunk := await file.read(1 << 20):
+            fh.write(chunk)
+    try:
+        stats = await run_in_threadpool(B.restore, dest, "replace" if mode == "replace" else "merge", True)
+    except Exception as e:  # noqa: BLE001
+        dest.unlink(missing_ok=True)
+        return JSONResponse({"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}, status_code=400)
+    for old in sorted(B.backups_dir().glob("received-*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)[3:]:
+        old.unlink(missing_ok=True)
+    mirror.STATE.update(last_ok=True, last_run=time.time(), source=f"sent by {sender}",
+                        result=f"{time.strftime('%b %d %H:%M')}: received a backup from {sender}: {stats.summary()}")
+    return {"ok": True, "summary": stats.summary()}
+
+
+def _push_ctx() -> dict:
+    from ... import mirror
+    return {"cfg": get_settings(), "push": mirror.PUSH}
+
+
+@router.get("/partials/push", name="push_partial")
+def push_partial(request: Request):
+    return templates.TemplateResponse(request, "partials/push.html", _push_ctx())
+
+
+@router.post("/settings/push", name="settings_push_save")
+def push_save(request: Request, push_to: str = Form(""), push_interval_hours: str = Form("24"), push_mode: str = Form("merge"), sync_token: str = Form("")):
+    from ... import mirror
+    from ...cli import config_set
+    try:
+        hours = float(push_interval_hours or 24)
+    except ValueError:
+        hours = 24.0
+    config_set("push_to", mirror.normalize_url(push_to))
+    config_set("push_interval_hours", str(hours))
+    config_set("push_mode", "replace" if push_mode == "replace" else "merge")
+    config_set("sync_token", sync_token.strip())
+    get_settings(reload=True)
+    return templates.TemplateResponse(request, "partials/push.html", {**_push_ctx(), "saved": True})
+
+
+@router.post("/settings/push/test", name="settings_push_test")
+def push_test(request: Request, push_to: str = Form("")):
+    from ... import mirror
+    ctx = _push_ctx()
+    try:
+        info = mirror.primary_info(push_to or get_settings().push_to)
+        ctx["test"] = f"✅ {mirror.resolve_url(push_to or get_settings().push_to)} is a Recipe Library v{info.get('version')} holding {info.get('recipes')} recipes; ready to receive"
+    except Exception as e:  # noqa: BLE001
+        ctx["test"] = f"⚠️ not a reachable Recipe Library: {mirror.explain(e)}"
+    return templates.TemplateResponse(request, "partials/push.html", ctx)
+
+
+@router.post("/settings/push/send", name="settings_push_send")
+def push_send(request: Request):
+    from ... import mirror
+    mirror.push_async()
+    time.sleep(0.3)
+    return templates.TemplateResponse(request, "partials/push.html", _push_ctx())

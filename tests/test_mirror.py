@@ -55,3 +55,51 @@ def test_mirror_settings_panel(client, library, monkeypatch):
     monkeypatch.setattr(mirror, "primary_info", lambda url, timeout=5.0: {"version": "0.1.0", "recipes": 7})
     t = client.post("/settings/mirror/test", data={"mirror_of": "http://macm5.local"}).text
     assert "with 7 recipes" in t
+
+
+def test_receive_endpoint_and_token(client, library, tmp_path, monkeypatch):
+    _add(client, tmp_path, "Cherry Tart")
+    zip_bytes = client.get("/api/backup/latest").content
+    from recipelib.db.engine import session_scope
+    with session_scope() as s:
+        rid = s.scalars(select(Recipe).where(Recipe.title == "Cherry Tart")).first().id
+    client.post(f"/recipes/{rid}/delete", follow_redirects=False)
+    # a sender delivers the backup: the deleted recipe comes back
+    r = client.post("/api/backup/receive", files={"file": ("from-mac.zip", zip_bytes, "application/zip")}, data={"mode": "merge"})
+    assert r.status_code == 200 and r.json()["ok"] and "1 recipe added" in r.json()["summary"]
+    with session_scope() as s:
+        assert s.scalars(select(Recipe).where(Recipe.title == "Cherry Tart", Recipe.deleted_at.is_(None))).first() is not None
+    assert "received a backup" in client.get("/partials/mirror").text
+    # with a token set, senders must know it
+    monkeypatch.setattr(library, "sync_token", "s3cret")
+    r = client.post("/api/backup/receive", files={"file": ("x.zip", zip_bytes, "application/zip")})
+    assert r.status_code == 403
+    r = client.post("/api/backup/receive", files={"file": ("x.zip", zip_bytes, "application/zip")}, headers={"X-Recipelib-Token": "s3cret"})
+    assert r.status_code == 200
+    # garbage is rejected cleanly
+    r = client.post("/api/backup/receive", files={"file": ("x.zip", b"not a zip", "application/zip")}, headers={"X-Recipelib-Token": "s3cret"})
+    assert r.status_code == 400
+
+
+def test_push_panel_and_push_once(client, library, monkeypatch):
+    assert "other way round" in client.get("/settings").text
+    assert "Backup server address" in client.get("/partials/push").text
+    r = client.post("/settings/push", data={"push_to": "ubuntu.local:8000", "push_interval_hours": "6", "push_mode": "merge", "sync_token": "abc"}).text
+    assert "saved" in r
+    from recipelib.config import config_path, get_settings
+    assert 'push_to = "http://ubuntu.local:8000"' in config_path().read_text() and get_settings().sync_token == "abc"
+    t = client.post("/settings/push/test", data={"push_to": "http://127.0.0.1:1"}).text
+    assert "nothing is listening" in t
+    # push_once end to end with the HTTP calls stubbed
+    from recipelib import mirror
+    sent = {}
+    class FakeResp:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return {"ok": True, "summary": "2 recipes added"}
+    import httpx
+    monkeypatch.setattr(mirror, "primary_info", lambda url, timeout=5.0: {"app": "recipelib", "version": "0.1.0", "recipes": 0})
+    monkeypatch.setattr(httpx, "post", lambda url, **kw: sent.update(url=url, headers=kw.get("headers")) or FakeResp())
+    msg = mirror.push_once("http://backup.local:8000", "merge")
+    assert "2 recipes added" in msg and sent["url"].endswith("/api/backup/receive") and sent["headers"]["X-Recipelib-Token"] == "abc"
+    assert mirror.PUSH["last_ok"] is True

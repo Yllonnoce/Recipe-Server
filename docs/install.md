@@ -136,15 +136,24 @@ To remove: Linux `systemctl --user disable --now recipelib`; macOS
 remove the service, firewall rules, environment and config; add `--purge` / `/purge` to
 also delete the library. Your recipes otherwise stay in `~/RecipeLibrary`.
 
-## Backup server (a second machine that mirrors the first)
+## Backup server (a second machine that holds a copy)
 
-Install Recipe Library on a second machine as usual, then in its Settings → "Backup server"
-enter the main server's address (for example `http://macm5.local`), click Test, Save, and
-"Sync now". From then on it pulls a fresh backup from the main server every 24 hours
-(`mirror_interval_hours`) and merges it in, the main server's version winning on conflicts;
-`mirror_mode = "replace"` makes it an exact copy instead. Or run `recipes sync-from
-http://macm5.local` by hand or from cron. If the main server dies, the backup server already
-has everything and can be used directly (clear `mirror_of` so it stops trying to pull).
+Install Recipe Library on a second machine as usual and leave it running. Then, **on the main
+server**, Settings → "Backup server": enter the backup machine's address (for example
+`http://ubuntu.local:8000`), click Test, Save, and "Send now". From then on the main server
+sends a fresh backup every 24 hours (`push_interval_hours`) and the backup server merges it
+in, the main server's version winning on conflicts; choose "become an exact copy"
+(`push_mode = "replace"`) for a strict mirror. `recipes push-to http://ubuntu.local:8000`
+does it from a terminal or cron. If the main server dies, the backup server already has
+everything and can be used directly.
+
+Optionally set the same `sync_token` on both servers; a backup server with a token only
+accepts backups from senders that know it.
+
+The reverse direction also exists for the case where the backup machine can reach the main
+server but not the other way round: on the backup machine, Settings → Backup server → "the
+other way round", enter the main server's address (`mirror_of`), and it pulls on its own
+schedule (`recipes sync-from http://macm5.local`).
 
 Anyone on the network can download a backup from a Recipe Library (`/api/backup/latest`),
 the same as the Backups page; keep the servers on a private network.
