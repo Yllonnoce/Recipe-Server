@@ -1,0 +1,15 @@
+<div id="netscan">
+  {% if not found %}<p class="muted">Nothing answered{% if port %} on port {{ port }}{% endif %}. Other machines must be on this network and listening on all interfaces (0.0.0.0), and their firewall must allow the port.</p>
+  {% else %}
+  <table class="kv">
+    {% for f in found %}
+    <tr><th>{{ f.label }}</th><td>
+      <code>{{ f.ip }}:{{ f.port }}</code>{% if f.name %} · {{ f.name }}{% endif %} · {{ f.detail }}{% if f.models %} · {{ f.models|join(', ') }}{% endif %}
+      {% if f.kind == 'recipe-web' %} · <a href="{{ f.url }}" target="_blank" rel="noopener">open ↗</a>
+      {% elif f.kind == 'ollama' %} · <button class="btn small" type="button" onclick="var i=document.querySelector('#ollama input[name=host]'); if(i){i.value='{{ f.url }}'; i.scrollIntoView({block:'center'});}">use for extraction</button>
+      {% elif f.kind == 'recipe-printer' %} · <code>{{ f.url }}</code>{% endif %}
+    </td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>

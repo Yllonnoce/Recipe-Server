@@ -33,3 +33,16 @@ def test_settings_panel_and_partial(client, monkeypatch):
     monkeypatch.setattr(llmhost, "scan_lan", lambda: [{"ip": "10.0.0.5", "name": "gpu-box", "host": "http://10.0.0.5:11434", "version": "0.32", "models": ["qwen3:8b"]}])
     html = client.post("/settings/ollama/scan").text
     assert "gpu-box" in html and "10.0.0.5:11434" in html
+
+
+def test_network_scan_panel(client, monkeypatch):
+    from recipelib import netscan
+    monkeypatch.setattr(netscan, "scan", lambda ports=None, timeout=0.35, networks=None: [
+        netscan.Found("10.0.4.30", 80, "recipe-web", "MacM5", "Recipe Library", "http://10.0.4.30:80"),
+        netscan.Found("10.0.4.30", 8631, "recipe-printer", "MacM5", "prints into a Recipe Library", "ipp://10.0.4.30:8631/ipp/print"),
+        netscan.Found("10.0.4.33", 11434, "ollama", "ubuntu", "Ollama 0.32", "http://10.0.4.33:11434", ["qwen3:8b"])])
+    assert 'id="network"' in client.get("/settings").text
+    html = client.post("/settings/scan", data={"port": ""}).text
+    assert "MacM5" in html and "ipp://10.0.4.30:8631/ipp/print" in html and "use for extraction" in html and "open ↗" in html
+    monkeypatch.setattr(netscan, "scan", lambda ports=None, timeout=0.35, networks=None: [])
+    assert "Nothing answered on port 9999" in client.post("/settings/scan", data={"port": "9999"}).text

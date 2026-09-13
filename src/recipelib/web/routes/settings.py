@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -232,3 +234,18 @@ def ollama_scan(request: Request):
     cfg = get_settings()
     return templates.TemplateResponse(request, "partials/ollama.html",
                                       _ollama_ctx(test=llmhost.test_host(cfg.ollama_host, timeout=2.5), scan=llmhost.scan_lan()))
+
+
+# ---- network scan -----------------------------------------------------------
+
+@router.post("/settings/scan", name="settings_scan")
+def network_scan(request: Request, port: str = Form("")):
+    from ... import netscan
+    ports = None
+    if port.strip():
+        try:
+            ports = [int(x) for x in re.split(r"[,\s]+", port.strip()) if x]
+        except ValueError:
+            ports = None
+    found = netscan.scan(ports=ports)
+    return templates.TemplateResponse(request, "partials/netscan.html", {"found": found, "port": port})

@@ -35,6 +35,16 @@
     <p class="muted">The model that turns page text into ingredients and steps. It can run on this machine or on any other computer on your network that has Ollama, for example a PC with a good graphics card. Changes apply immediately, no restart.</p>
     <div hx-get="{{ request.url_for('ollama_partial') }}" hx-trigger="load" hx-swap="outerHTML"><span class="spin"></span> checking Ollama…</div>
   </section>
+  <section class="panel wide" id="network">
+    <h2>Network</h2>
+    <p class="muted">Look around this network for other Recipe Library servers, their printers, and machines running Ollama. Leave the port empty to check the usual ones, or enter one or more ports to look for anything else.</p>
+    <form hx-post="{{ request.url_for('settings_scan') }}" hx-target="#netscan" hx-swap="outerHTML" hx-indicator="#netSpin" class="inline-form">
+      <label class="mini">Port(s) <input name="port" placeholder="11434, 8000, 80, 8631" style="width:11em"></label>
+      <button class="btn primary" type="submit">Scan network</button>
+      <span id="netSpin" class="htmx-indicator"><span class="spin"></span> scanning, about 10 seconds…</span>
+    </form>
+    <div id="netscan"></div>
+  </section>
   <section class="panel wide" id="backups">
     <h2>Backups</h2>
     <p class="muted">A backup is one zip with the database and every PDF and picture. One is made automatically every {{ cfg.auto_backup_days|int if cfg.auto_backup_days == cfg.auto_backup_days|int else cfg.auto_backup_days }} day(s), keeping the newest {{ cfg.backup_keep }}, in <code>{{ cfg.library_dir }}/backups</code>. Copy them somewhere else too.</p>

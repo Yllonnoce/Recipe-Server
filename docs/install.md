@@ -181,7 +181,9 @@ Ollama listens only on its own machine by default. On the machine that runs it:
   start it again.
 
 Open TCP port 11434 on that machine's firewall for your private network. "Find Ollama on
-my network" in Settings scans the local network for machines that answer on that port.
+my network" in Settings scans the local network for machines that answer on that port, and
+Settings → Network (or `recipes scan`, optionally `--port 1234`) finds Ollama hosts, other
+Recipe Library servers and their printers in one go.
 
 ## Memory and the model
 

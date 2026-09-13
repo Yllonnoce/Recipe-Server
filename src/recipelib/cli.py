@@ -169,6 +169,20 @@ def backup(out: Path | None = typer.Option(None, help="zip path (default: Recipe
 
 
 @cli.command()
+def scan(port: list[int] = typer.Option(None, "--port", "-p", help="port(s) to look for; default: Ollama 11434, Recipe Library 8000/80, printer 8631"),
+         network: str = typer.Option(None, help="/24 prefix to scan, e.g. 10.0.4 (default: this machine's networks)")):
+    """Find Ollama hosts, Recipe Library servers and printers on the local network."""
+    from .netscan import scan as do_scan
+    found = do_scan(ports=port or None, networks=[network] if network else None)
+    if not found:
+        typer.echo("nothing found (is the other machine on this network and listening on 0.0.0.0?)")
+        return
+    for f in found:
+        extra = f" · models: {', '.join(f.models)}" if f.models else ""
+        typer.echo(f"{f.label:<24} {f.ip:<15} {f.name:<14} {f.url}  {f.detail}{extra}")
+
+
+@cli.command()
 def shrink():
     """Recompress every stored PDF, cover and thumbnail (uses the shrink_* config values)."""
     from .capture.shrink import shrink_library
