@@ -60,11 +60,16 @@ def edit(recipe_id: int, request: Request, s: Session = Depends(get_db)):
 
 @router.post("/{recipe_id}/edit", name="recipe_edit_save")
 async def edit_save(recipe_id: int, request: Request, s: Session = Depends(get_db)):
+    """The edit form is multipart so a chosen/pasted photo saves with everything else."""
     r = _get(s, recipe_id)
     form = await request.form()
-    data = {k: form.get(k) for k in form.keys()}
+    data = {k: form.get(k) for k in form.keys() if not hasattr(form.get(k), "read")}
     data["categories"] = form.getlist("categories")        # checkbox group: all ticked values
     R.apply_edit_form(s, r, data)
+    choice = (form.get("choice") or "keep")
+    upload = form.get("file")
+    if choice != "keep":
+        await _apply_cover(s, r, choice, form.get("image_url") or "", upload if hasattr(upload, "read") else None)
     s.commit()
     return RedirectResponse(request.url_for("recipe_detail", recipe_id=r.id), status_code=303)
 
@@ -158,8 +163,16 @@ def page_image(recipe_id: int, page: int, s: Session = Depends(get_db)):
 async def set_cover(recipe_id: int, request: Request, choice: str = Form("keep"), image_url: str = Form(""),
                     file: UploadFile | None = File(None), s: Session = Depends(get_db)):
     """choice: xref:<n> (image from the PDF), page:<n> (rendered page), upload, url, none, keep."""
-    from ...capture import pdf as pdfops
     r = _get(s, recipe_id)
+    if choice == "keep":
+        return RedirectResponse(request.url_for("recipe_edit", recipe_id=r.id), status_code=303)
+    await _apply_cover(s, r, choice, image_url, file)
+    s.commit()
+    return RedirectResponse(request.url_for("recipe_detail", recipe_id=r.id), status_code=303)
+
+
+async def _apply_cover(s: Session, r, choice: str, image_url: str, file) -> None:
+    from ...capture import pdf as pdfops
     pdf = _pdf_path(r)
     png: bytes | None = None
     if choice == "upload":
@@ -199,7 +212,5 @@ async def set_cover(recipe_id: int, request: Request, choice: str = Form("keep")
     elif choice == "none":
         png = None
     else:
-        return RedirectResponse(request.url_for("recipe_edit", recipe_id=r.id), status_code=303)
+        return
     R.set_cover_from_png(s, r, png)
-    s.commit()
-    return RedirectResponse(request.url_for("recipe_detail", recipe_id=r.id), status_code=303)

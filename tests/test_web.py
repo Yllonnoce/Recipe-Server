@@ -113,6 +113,17 @@ def test_upload_to_library(client, library, tmp_path):
         rec = s.get(Recipe, rid)
         assert rec.cover_asset_id is not None and rec.cover_asset_id != cover_a
     assert client.post(f"/recipes/{rid}/cover", data={"choice": "url", "image_url": "not a url"}, follow_redirects=False).status_code == 400
+    # the main Save button applies a pasted/uploaded photo too, and keeps it when no photo is touched
+    pix2 = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 320, 240), False); pix2.clear_with(30)
+    r = client.post(f"/recipes/{rid}/edit", data={"title": "Fluffy Pancakes", "ingredients": "2 cups flour", "steps": "Fry.", "choice": "upload"},
+                    files={"file": ("pasted.png", pix2.tobytes("png"), "image/png")}, follow_redirects=False)
+    assert r.status_code == 303
+    with session_scope() as s:
+        saved_cover = s.get(Recipe, rid).cover_asset_id
+        assert saved_cover is not None
+    client.post(f"/recipes/{rid}/edit", data={"title": "Fluffy Pancakes", "ingredients": "2 cups flour", "steps": "Fry.", "choice": "keep"}, follow_redirects=False)
+    with session_scope() as s:
+        assert s.get(Recipe, rid).cover_asset_id == saved_cover
     client.post(f"/recipes/{rid}/cover", data={"choice": "none"}, follow_redirects=False)
     with session_scope() as s:
         assert s.get(Recipe, rid).cover_asset_id is None

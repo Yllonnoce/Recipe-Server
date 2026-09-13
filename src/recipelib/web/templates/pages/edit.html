@@ -3,7 +3,7 @@
 {% block scripts %}
 <script>
 (function () {
-  const form = document.getElementById('cover'), fileIn = document.getElementById('coverFile'), urlIn = document.getElementById('coverUrl');
+  const form = document.getElementById('editForm'), fileIn = document.getElementById('coverFile'), urlIn = document.getElementById('coverUrl');
   const tile = document.getElementById('uploadTile'), preview = document.getElementById('uploadPreview'), urlPreview = document.getElementById('urlPreview');
   const pick = (v) => { const r = form.querySelector('input[type=radio][value="' + v + '"]'); if (r) r.checked = true; };
   const flash = (m) => { const h = document.getElementById('pasteHint'); h.textContent = m; setTimeout(() => h.textContent = 'Tip: copy a picture anywhere, then press Ctrl+V (⌘V) on this page.', 3000); };
@@ -12,13 +12,13 @@
     const dt = new DataTransfer(); dt.items.add(new File([file], file.name || 'pasted.png', { type: file.type }));
     fileIn.files = dt.files;
     preview.innerHTML = ''; const img = document.createElement('img'); img.src = URL.createObjectURL(file); preview.appendChild(img); preview.classList.remove('none');
-    pick('upload'); flash('Image ready — click "Use this photo".');
+    pick('upload'); flash('Image ready — click Save.');
     tile.scrollIntoView({ block: 'nearest' });
   }
   function useUrl(u) {
     urlIn.value = u; pick('url');
     urlPreview.innerHTML = ''; const img = document.createElement('img'); img.src = u; img.onerror = () => { urlPreview.textContent = 'from a web address'; };
-    urlPreview.appendChild(img); urlPreview.classList.remove('none'); flash('Address ready — click "Use this photo".');
+    urlPreview.appendChild(img); urlPreview.classList.remove('none'); flash('Address ready — click Save.');
   }
   fileIn.addEventListener('change', () => { if (fileIn.files[0]) useFile(fileIn.files[0]); });
   urlIn.addEventListener('input', () => { if (/^https?:\/\//.test(urlIn.value)) useUrl(urlIn.value.trim()); });
@@ -70,7 +70,7 @@
     <iframe src="{{ request.url_for('recipe_read', recipe_id=r.id) }}?embed=1" title="PDF"></iframe>
     {% endif %}
   </div>
-  <form class="edit-form" method="post" action="{{ request.url_for('recipe_edit_save', recipe_id=r.id) }}">
+  <form class="edit-form" id="editForm" method="post" action="{{ request.url_for('recipe_edit_save', recipe_id=r.id) }}" enctype="multipart/form-data">
     <h1>Edit recipe</h1>
     <label>Title <input name="title" value="{{ r.title }}" required maxlength="200"></label>
     <label>Description <textarea name="description" rows="2">{{ r.description or '' }}</textarea></label>
@@ -110,11 +110,11 @@
       <button class="btn primary" type="submit">Save</button>
       <a class="btn" href="{{ request.url_for('recipe_detail', recipe_id=r.id) }}">Cancel</a>
     </div>
-  </form>
-  <form class="edit-form cover-form" id="cover" method="post" action="{{ request.url_for('recipe_cover', recipe_id=r.id) }}" enctype="multipart/form-data">
+  <div class="cover-form" id="cover">
     <h2>Photo</h2>
     <p class="muted">The photo on the card and at the top of the recipe. Pick one found in the PDF, use a page as the picture, or upload your own.</p>
     <div class="cover-grid">
+      <input type="radio" name="choice" value="keep" checked hidden>
       <label class="cover-opt {{ 'current' if not r.cover_asset_id }}">
         <input type="radio" name="choice" value="none"> 
         <span class="thumb none">no photo<br><small>shows page 1</small></span>
@@ -145,10 +145,11 @@
       </label>
     </div>
     <div class="actions">
-      <button class="btn" type="submit">Use this photo</button>
+      <button class="btn primary" type="submit">Save</button>
       <button class="btn" type="button" id="pasteBtn" title="Paste an image or an image address from the clipboard">📋 Paste</button>
-      <span class="muted" id="pasteHint">Tip: copy a picture anywhere, then press Ctrl+V (⌘V) on this page.</span>
+      <span class="muted" id="pasteHint">Tip: copy a picture anywhere, then press Ctrl+V (⌘V) on this page. Saving keeps the selected photo.</span>
     </div>
+  </div>
   </form>
 </div>
 {% endblock %}
