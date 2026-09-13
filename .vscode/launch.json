@@ -1,0 +1,56 @@
+{
+  // F5 in VS Code. Pick a configuration from the Run and Debug dropdown.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Recipe Library: serve (debug)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "recipelib.cli",
+      "args": ["serve"],
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        // a separate port so it can run next to the installed service on 8000/8631
+        "RECIPELIB_PORT": "8001",
+        "RECIPELIB_IPP_PORT": "8632",
+        "RECIPELIB_LOG_LEVEL": "debug",
+        "PYTHONUNBUFFERED": "1"
+      }
+    },
+    {
+      "name": "Recipe Library: serve on a scratch library (debug)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "recipelib.cli",
+      "args": ["serve", "--no-printer"],
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "RECIPELIB_PORT": "8001",
+        "RECIPELIB_LIBRARY_DIR": "${workspaceFolder}/.debug-library",
+        "RECIPELIB_CONFIG": "${workspaceFolder}/.debug-library/config.toml",
+        "RECIPELIB_LOG_LEVEL": "debug",
+        "PYTHONUNBUFFERED": "1"
+      }
+    },
+    {
+      "name": "Pytest: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q", "-x", "${file}"],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "Pytest: all",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q"],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}
