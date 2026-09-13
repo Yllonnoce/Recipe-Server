@@ -6,6 +6,8 @@
 #   ./install.sh --no-model      skip the Ollama model download
 #   ./install.sh --no-browser    skip the Chromium download (URL capture disabled until you run it)
 #   ./install.sh --nginx         put nginx in front on port 80 (large uploads, long timeouts); needs sudo
+#   ./install.sh --no-firewall   don't touch the macOS firewall
+#   ./install.sh --firewall-only just (re)do the macOS firewall step
 #
 # Nothing is installed system-wide except (optionally, with your sudo password) the
 # Chromium shared libraries on Linux, Ollama, and a firewall rule.
@@ -14,14 +16,16 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
 OS="$(uname -s)"
-SERVICE=0; MODEL=1; BROWSER=1; NGINX=0
+SERVICE=0; MODEL=1; BROWSER=1; NGINX=0; FIREWALL=1; FIREWALL_ONLY=0
 for a in "$@"; do
   case "$a" in
     --service) SERVICE=1 ;;
     --no-model) MODEL=0 ;;
     --no-browser) BROWSER=0 ;;
     --nginx) NGINX=1 ;;
-    -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
+    --no-firewall) FIREWALL=0 ;;
+    --firewall-only) FIREWALL_ONLY=1 ;;
+    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
     *) echo "unknown option: $a" >&2; exit 2 ;;
   esac
 done
@@ -54,13 +58,21 @@ if [ -n "$BAD" ]; then
   eval "sudo chown -R \"$(id -un)\" $BAD" || { warn "could not change ownership; run: sudo chown -R $(id -un)$BAD"; exit 1; }
 fi
 
+if [ "$FIREWALL_ONLY" = 1 ]; then
+  PY="$HERE/.venv/bin/python"; [ -x "$PY" ] || { warn "install first (./install.sh)"; exit 1; }
+  MODEL=0; BROWSER=0; SKIP_INSTALL=1
+else
+  SKIP_INSTALL=0
+fi
+
 # ---------------------------------------------------------------- uv + python
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-if ! have uv; then
+if [ "$SKIP_INSTALL" = 0 ] && ! have uv; then
   say "Installing uv (Python manager, into ~/.local/bin)"
   curl -LsSf https://astral.sh/uv/install.sh | sh
   export PATH="$HOME/.local/bin:$PATH"
 fi
+if [ "$SKIP_INSTALL" = 0 ]; then
 have uv || { warn "uv did not install; see https://docs.astral.sh/uv/"; exit 1; }
 
 say "Creating the Python 3.12 environment in $HERE/.venv"
@@ -69,6 +81,7 @@ PY="$HERE/.venv/bin/python"
 
 say "Installing Recipe Library and its dependencies"
 uv pip install --python "$PY" -e ".[ocr]"
+fi
 
 # ---------------------------------------------------------------- browser
 if [ "$BROWSER" = 1 ]; then
@@ -87,7 +100,7 @@ if [ "$BROWSER" = 1 ]; then
 fi
 
 # ---------------------------------------------------------------- ollama
-if ! have ollama; then
+if [ "$SKIP_INSTALL" = 0 ] && ! have ollama; then
   say "Ollama (local model runner) is not installed"
   if [ "$OS" = "Linux" ]; then
     read -r -p "Install it now with the official script (needs sudo)? [Y/n] " ans
@@ -113,9 +126,11 @@ if [ "$MODEL" = 1 ] && have ollama; then
 fi
 
 # ---------------------------------------------------------------- config + library
+if [ "$SKIP_INSTALL" = 0 ]; then
 say "Writing the config file and creating ~/RecipeLibrary"
 "$HERE/.venv/bin/recipes" init
 "$HERE/.venv/bin/recipes" doctor || true
+fi
 
 # ---------------------------------------------------------------- firewall (Linux ufw)
 if [ "$OS" = "Linux" ] && have ufw && sudo -n ufw status 2>/dev/null | grep -q "Status: active"; then
@@ -126,13 +141,19 @@ fi
 # ---------------------------------------------------------------- firewall (macOS application firewall)
 if [ "$OS" = "Darwin" ]; then
   FW=/usr/libexec/ApplicationFirewall/socketfilterfw
-  if [ -x "$FW" ] && "$FW" --getglobalstate 2>/dev/null | grep -qi "enabled"; then
-    say "Allowing the app through the macOS firewall (needs your password)"
+  if [ "$FIREWALL" = 1 ] && [ -x "$FW" ] && "$FW" --getglobalstate 2>/dev/null | grep -qi "enabled"; then
+    say "Allowing the app through the macOS firewall"
     PYREAL="$(cd "$HERE" && "$PY" -c 'import sys, os; print(os.path.realpath(sys.executable))')"
-    sudo "$FW" --add "$PYREAL" >/dev/null 2>&1 || true
-    sudo "$FW" --unblockapp "$PYREAL" >/dev/null 2>&1 || warn "could not unblock $PYREAL; allow it under System Settings > Network > Firewall > Options"
-    sudo "$FW" --add "$HERE/.venv/bin/recipes" >/dev/null 2>&1 || true
-    sudo "$FW" --unblockapp "$HERE/.venv/bin/recipes" >/dev/null 2>&1 || true
+    echo "    Your password is needed for this step (press Ctrl-C to skip it; re-run later with --firewall-only)."
+    if sudo -v; then
+      sudo "$FW" --add "$PYREAL" 2>&1 | sed 's/^/    /'
+      sudo "$FW" --unblockapp "$PYREAL" 2>&1 | sed 's/^/    /'
+      sudo "$FW" --add "$HERE/.venv/bin/recipes" >/dev/null 2>&1 || true
+      sudo "$FW" --unblockapp "$HERE/.venv/bin/recipes" >/dev/null 2>&1 || true
+    else
+      warn "skipped. Other devices will not reach the server until Python is allowed through the firewall:"
+      warn "    System Settings > Network > Firewall > Options > allow 'python3', or re-run: ./install.sh --firewall-only"
+    fi
   fi
 fi
 
@@ -173,6 +194,7 @@ if [ "$SERVICE" = 1 ]; then
 fi
 
 # ---------------------------------------------------------------- done
+if [ "$FIREWALL_ONLY" = 1 ]; then say "Firewall step done."; exit 0; fi
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"; [ -n "$IP" ] || IP="$(ipconfig getifaddr en0 2>/dev/null || echo localhost)"
 say "Installed."
 WEB="http://$IP:8000"; [ "$NGINX" = 1 ] && WEB="http://$IP"

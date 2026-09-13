@@ -41,7 +41,14 @@ def run_checks(quick: bool = False) -> list[Check]:
         from playwright.sync_api import sync_playwright  # noqa: F401
         import os
         from pathlib import Path
-        cache = Path(os.environ.get("PLAYWRIGHT_BROWSERS_PATH", Path.home() / ".cache" / "ms-playwright"))
+        if os.environ.get("PLAYWRIGHT_BROWSERS_PATH"):
+            cache = Path(os.environ["PLAYWRIGHT_BROWSERS_PATH"])
+        elif sys.platform == "darwin":
+            cache = Path.home() / "Library" / "Caches" / "ms-playwright"
+        elif sys.platform == "win32":
+            cache = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "ms-playwright"
+        else:
+            cache = Path.home() / ".cache" / "ms-playwright"
         has = cache.exists() and any(p.name.startswith("chromium") for p in cache.iterdir())
         out.append(Check("Playwright Chromium", has, str(cache) if has else "run: playwright install chromium"))
     except Exception as e:  # noqa: BLE001
