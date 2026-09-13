@@ -67,7 +67,7 @@
 <div class="edit-layout">
   <div class="edit-pdf">
     {% if r.pdf_asset_id %}
-    <iframe src="{{ request.url_for('recipe_read', recipe_id=r.id) }}?embed=1" title="PDF"></iframe>
+    <iframe src="{{ request.url_for('recipe_read', recipe_id=r.id) }}?embed=1&v={{ r.pdf_asset_id }}" title="PDF"></iframe>
     {% endif %}
   </div>
   <form class="edit-form" id="editForm" method="post" action="{{ request.url_for('recipe_edit_save', recipe_id=r.id) }}" enctype="multipart/form-data">

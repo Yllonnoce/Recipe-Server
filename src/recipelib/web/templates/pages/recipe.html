@@ -42,7 +42,7 @@
         <a class="btn {{ 'primary' if not (r.ingredients or r.steps) }}" href="{{ request.url_for('recipe_read', recipe_id=r.id) }}">📖 Read PDF</a>
         <a class="btn" href="{{ request.url_for('recipe_edit', recipe_id=r.id) }}">✎ Edit</a>
         {% include "partials/fav_button.html" %}
-        <a class="btn" href="{{ request.url_for('recipe_file', recipe_id=r.id) }}?dl=1">⬇ PDF</a>
+        <a class="btn" href="{{ request.url_for('recipe_file', recipe_id=r.id) }}?dl=1&v={{ r.pdf_asset_id }}">⬇ PDF</a>
         <form method="post" action="{{ request.url_for('recipe_delete', recipe_id=r.id) }}" onsubmit="return confirm('Delete this recipe? The PDF stays in the assets folder.')"><button class="btn danger">Delete</button></form>
       </div>
       {% if r.ingredients %}

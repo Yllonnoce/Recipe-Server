@@ -29,20 +29,10 @@ def ingest(queue, doc: Document) -> int:
     ext = _EXT.get(doc.fmt, ".bin")
     dest = spool / f"job{doc.job.id:06d}{ext}"
     Path(doc.path).replace(dest)
-    if getattr(doc.job, "reverse", False) and ext == ".pdf":
-        try:
-            import pymupdf
-            d = pymupdf.open(dest)
-            if d.page_count > 1:
-                d.select(list(range(d.page_count - 1, -1, -1)))
-                data = d.tobytes(garbage=3, deflate=True)
-                d.close()
-                dest.write_bytes(data)
-                log.info("printer: job %s asked for reverse-order delivery; pages put back in reading order", doc.job.id)
-            else:
-                d.close()
-        except Exception as e:  # noqa: BLE001
-            log.warning("printer: could not un-reverse job %s: %s", doc.job.id, e)
+    if getattr(doc.job, "reverse", False):
+        # 'reverse-order' means the device wanted the printer to *output* pages
+        # last-first; the document itself is in reading order, so leave it alone.
+        log.info("printer: job %s asked for reverse-order output (ignored; document kept as sent)", doc.job.id)
     log.info("printer: job %s '%s' (%s, %d bytes) queued", doc.job.id, doc.job.name, doc.fmt, dest.stat().st_size)
     return queue.enqueue("printer", pdf_path=str(dest), title_hint=clean_job_name(doc.job.name),
                          ipp_job_id=doc.job.id, priority=3)

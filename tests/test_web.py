@@ -49,6 +49,7 @@ def test_upload_to_library(client, library, tmp_path):
     full = client.get(f"/recipes/{rid}/file")
     assert full.headers["content-type"] == "application/pdf"
     assert "accept-ranges" in {k.lower() for k in full.headers}
+    assert full.headers["cache-control"] == "no-cache"
     assert "attachment" in client.get(f"/recipes/{rid}/file?dl=1").headers["content-disposition"]
 
     # progress + bookmarks

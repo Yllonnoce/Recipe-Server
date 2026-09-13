@@ -141,7 +141,7 @@
   import { RecipeReader } from "{{ request.url_for('static', path='reader/recipe_reader.js') }}?v={{ static_v }}";
   pdfjsLib.GlobalWorkerOptions.workerSrc = "{{ request.url_for('static', path='reader/pdfjs/pdf.worker.min.mjs') }}";
   new RecipeReader(pdfjsLib, {
-    url: "{{ request.url_for('recipe_file', recipe_id=r.id) }}",
+    url: "{{ request.url_for('recipe_file', recipe_id=r.id) }}?v={{ r.pdf_asset_id }}",
     progressUrl: "{{ request.url_for('recipe_progress', recipe_id=r.id) }}",
     bookmarksUrl: "{{ request.url_for('recipe_bookmark_add', recipe_id=r.id) }}",
     startPage: {{ start_page }},

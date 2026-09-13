@@ -50,7 +50,8 @@ def file(recipe_id: int, request: Request, s: Session = Depends(get_db)):
     p = _pdf_path(r)
     safe = re.sub(r"[^\w\s.-]", "", r.title).strip()[:80] or "recipe"
     dl = request.query_params.get("dl") == "1"
-    headers = {"Content-Disposition": f'{"attachment" if dl else "inline"}; filename="{safe}.pdf"'}
+    headers = {"Content-Disposition": f'{"attachment" if dl else "inline"}; filename="{safe}.pdf"',
+               "Cache-Control": "no-cache"}       # revalidate: page edits replace the file behind this URL
     # Starlette's FileResponse handles Range / If-Range / ETag / Last-Modified
     return FileResponse(p, media_type="application/pdf", headers=headers)
 
