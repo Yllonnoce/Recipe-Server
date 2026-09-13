@@ -303,16 +303,36 @@ def _ollama_daemon_macos(user: str, home: Path) -> None:
 </dict></plist>
 """
     tmp = Path(tempfile.mkstemp(suffix=".plist")[1]); tmp.write_text(plist)
-    _sudo(["launchctl", "bootout", "system/com.recipelib.ollama"])
     _sudo(["install", "-o", "root", "-g", "wheel", "-m", "644", str(tmp), str(OLLAMA_PLIST)]); tmp.unlink()
-    if _sudo(["launchctl", "bootstrap", "system", str(OLLAMA_PLIST)]) != 0:
-        _sudo(["launchctl", "load", "-w", str(OLLAMA_PLIST)])
+    _launchd_bootstrap_system(OLLAMA_PLIST, "com.recipelib.ollama")
     typer.echo(f"Ollama will start at boot too ({binary}); quit the menu-bar Ollama app to avoid running two copies")
 
 
-def _sudo(cmd: list[str]) -> int:
+def _sudo(cmd: list[str], quiet: bool = False) -> int:
     import subprocess
+    if quiet:
+        return subprocess.run(["sudo", *cmd], capture_output=True).returncode
     return subprocess.run(["sudo", *cmd]).returncode
+
+
+def _launchd_bootstrap_system(plist: Path, label: str) -> None:
+    """bootout is asynchronous: launchd keeps the label until the old process
+    has exited, and a bootstrap in that window fails with 'Input/output error'.
+    Wait for the label to disappear, then bootstrap with a couple of retries."""
+    import subprocess
+    import time
+    _sudo(["launchctl", "bootout", f"system/{label}"], quiet=True)
+    for _ in range(30):
+        if subprocess.run(["sudo", "-n", "launchctl", "print", f"system/{label}"], capture_output=True).returncode != 0:
+            break
+        time.sleep(0.5)
+    _sudo(["launchctl", "enable", f"system/{label}"], quiet=True)
+    for attempt in range(4):
+        if _sudo(["launchctl", "bootstrap", "system", str(plist)], quiet=attempt < 3) == 0:
+            return
+        time.sleep(2)
+    if _sudo(["launchctl", "load", "-w", str(plist)]) != 0:
+        typer.echo(f"!! launchd would not load {plist}; try: sudo launchctl bootstrap system {plist}", err=True)
 
 
 def _install_system() -> None:
@@ -364,11 +384,8 @@ WantedBy=multi-user.target
         _run(["launchctl", "bootout", f"gui/{os.getuid()}/com.recipelib.server"], quiet=True)
         if sp["plist"].exists():
             sp["plist"].unlink()
-        _sudo(["launchctl", "bootout", "system/com.recipelib.server"])
         _sudo(["install", "-o", "root", "-g", "wheel", "-m", "644", str(tmp), str(SYSTEM_PLIST)]); tmp.unlink()
-        _sudo(["launchctl", "enable", "system/com.recipelib.server"])
-        if _sudo(["launchctl", "bootstrap", "system", str(SYSTEM_PLIST)]) != 0:
-            _sudo(["launchctl", "load", "-w", str(SYSTEM_PLIST)])
+        _launchd_bootstrap_system(SYSTEM_PLIST, "com.recipelib.server")
         _ollama_daemon_macos(user, home)
         typer.echo(f"installed {SYSTEM_PLIST} (starts at boot, runs as {user}, no login needed)\nstatus: recipes service status")
     else:
