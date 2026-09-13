@@ -45,7 +45,7 @@
     {% if upd.last_log %}<pre class="log">{{ upd.last_log }}</pre>{% endif %}
     {% if not ver.is_git %}<p class="muted">Updates need the app to be installed from a git clone (<code>git clone &lt;url&gt;</code> then <code>./install.sh</code>).</p>{% endif %}
   </section>
-  <section class="panel" id="backups">
+  <section class="panel wide" id="backups">
     <h2>Backups</h2>
     <p class="muted">A backup is one zip with the database and every PDF and picture. One is made automatically every {{ cfg.auto_backup_days|int if cfg.auto_backup_days == cfg.auto_backup_days|int else cfg.auto_backup_days }} day(s), keeping the newest {{ cfg.backup_keep }}, in <code>{{ cfg.library_dir }}/backups</code>. Copy them somewhere else too.</p>
     <div class="actions">
@@ -55,20 +55,28 @@
       </form>
     </div>
     {% if backups %}
-    <table class="kv backups">
+    <ul class="backup-list">
       {% for b in backups %}
-      <tr>
-        <th><a href="{{ request.url_for('settings_backup_download', name=b.name) }}">{{ b.name }}</a><br><small class="muted">{{ b.mtime.strftime('%b %-d, %Y %H:%M') }} · {{ (b.bytes / 1048576)|round(1) }} MB{% if b.recipes is not none %} · {{ b.recipes }} recipes{% endif %}{% if b.version %} · v{{ b.version }}{% endif %}</small></th>
-        <td class="bk-actions">
+      <li>
+        <div class="bk-name">
+          <a href="{{ request.url_for('settings_backup_download', name=b.name) }}" title="Download">{{ b.name }}</a>
+          <small class="muted">{{ b.mtime.strftime('%b %-d, %Y %H:%M') }} · {{ (b.bytes / 1048576)|round(1) }} MB{% if b.recipes is not none %} · {{ b.recipes }} recipes{% endif %}{% if b.version %} · v{{ b.version }}{% endif %}</small>
+        </div>
+        <div class="bk-actions">
+          <a class="btn small" href="{{ request.url_for('settings_backup_download', name=b.name) }}">⬇ Download</a>
           <form method="post" action="{{ request.url_for('settings_backup_restore', name=b.name) }}" onsubmit="return confirm('Merge this backup into the library? Recipes you already have are kept.')">
-            <input type="hidden" name="mode" value="merge"><label class="check"><input type="checkbox" name="overwrite" value="1"> let backup win</label><button class="btn small">Merge</button></form>
+            <input type="hidden" name="mode" value="merge">
+            <button class="btn small">Merge</button>
+            <label class="check" title="Replace matching local recipes with the backup's version"><input type="checkbox" name="overwrite" value="1"> backup wins</label>
+          </form>
           <form method="post" action="{{ request.url_for('settings_backup_restore', name=b.name) }}" onsubmit="return confirm('REPLACE the whole library with this backup? Everything currently in it is deleted first.')">
-            <input type="hidden" name="mode" value="replace"><button class="btn small danger">Replace library</button></form>
+            <input type="hidden" name="mode" value="replace"><button class="btn small danger">Replace library</button>
+          </form>
           <form method="post" action="{{ request.url_for('settings_backup_delete', name=b.name) }}" onsubmit="return confirm('Delete this backup file?')"><button class="btn small">Delete</button></form>
-        </td>
-      </tr>
+        </div>
+      </li>
       {% endfor %}
-    </table>
+    </ul>
     {% else %}<p class="muted">No backups yet.</p>{% endif %}
   </section>
   <section class="panel">

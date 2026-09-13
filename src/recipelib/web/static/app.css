@@ -236,13 +236,25 @@ details.facet > summary h4 .sel { text-transform: none; letter-spacing: 0; color
 @media (max-width: 900px) { details.facet { width: 100%; } }
 header.top nav .upd { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 1px 8px; font-size: .7em; vertical-align: middle; }
 pre.log { background: var(--chip); padding: 10px; border-radius: 8px; font-size: .8em; white-space: pre-wrap; max-height: 260px; overflow: auto; }
-table.backups th { font-weight: 600; }
-table.backups .bk-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-table.backups .bk-actions form { display: inline-flex; gap: 6px; align-items: center; }
-table.backups .bk-actions label.check { font-size: .8em; }
+.panel.wide { grid-column: 1 / -1; }
+.backup-list { list-style: none; padding: 0; margin: 12px 0 0; }
+.backup-list li { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line); }
+.backup-list .bk-name { display: flex; flex-direction: column; min-width: 0; }
+.backup-list .bk-name a { font-weight: 600; word-break: break-all; }
+.backup-list .bk-actions { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.backup-list .bk-actions form { display: inline-flex; gap: 6px; align-items: center; margin: 0; }
+.backup-list .bk-actions label.check { font-size: .8em; margin: 0; white-space: nowrap; }
 
 /* units switch */
 .units { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; font-size: .8em; }
 .units button { font: inherit; padding: 2px 10px; border: 0; background: var(--panel); color: var(--muted); cursor: pointer; }
 .units button + button { border-left: 1px solid var(--line); }
 .units button.on { background: var(--accent); color: var(--accent-ink); }
+
+/* narrow header: icon-only brand, tighter links, never overflow */
+@media (max-width: 640px) {
+  header.top { gap: 8px; padding: 8px 10px; }
+  header.top .brand-text { display: none; }
+  header.top nav { gap: 10px; font-size: .95em; margin-left: auto; overflow-x: auto; white-space: nowrap; }
+  header.top nav .upd { display: none; }
+}

@@ -19,7 +19,7 @@
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="{{ request.url_for('library') }}">🍲 Recipe Library</a>
+  <a class="brand" href="{{ request.url_for('library') }}">🍲<span class="brand-text"> Recipe Library</span></a>
   <nav>
     <a href="{{ request.url_for('library') }}">Library</a>
     <a href="{{ request.url_for('capture') }}">Add</a>
