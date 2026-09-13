@@ -174,6 +174,13 @@ if [ "$NGINX" = 1 ]; then
       NGX_DIR="$(brew --prefix 2>/dev/null)/etc/nginx/servers"; mkdir -p "$NGX_DIR"
       printf '%s\n' "$CONF" > "$NGX_DIR/recipelib.conf"
       sudo brew services restart nginx || warn "start nginx as root so it can use port 80: sudo brew services start nginx"
+      # the macOS firewall blocks nginx just like it blocked python: allow the real binary
+      FW=/usr/libexec/ApplicationFirewall/socketfilterfw
+      if [ -x "$FW" ] && "$FW" --getglobalstate 2>/dev/null | grep -qi enabled; then
+        NGXBIN="$("$PY" -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "$(brew --prefix nginx)/bin/nginx")"
+        sudo "$FW" --add "$NGXBIN" 2>&1 | sed 's/^/    /'
+        sudo "$FW" --unblockapp "$NGXBIN" 2>&1 | sed 's/^/    /'
+      fi
     elif [ -d /etc/nginx/sites-available ]; then
       printf '%s\n' "$CONF" | sudo tee /etc/nginx/sites-available/recipelib >/dev/null
       sudo ln -sf /etc/nginx/sites-available/recipelib /etc/nginx/sites-enabled/recipelib
