@@ -177,6 +177,19 @@ def _opname(code: int) -> str:
             0x003B: "Close-Job", 0x003C: "Identify-Printer"}.get(code, f"op-{code:#06x}")
 
 
+def printer_display_name(configured: str) -> str:
+    """'Recipe Library' -> 'Recipe Library (MacM5)'; '{host}' in the config is
+    replaced by the computer's short name; any other custom name is used as is."""
+    import socket
+    host = (socket.gethostname() or "").split(".")[0] or "server"
+    name = (configured or "Recipe Library").strip()
+    if "{host}" in name:
+        return name.replace("{host}", host)
+    if name.lower() == "recipe library":
+        return f"{name} ({host})"
+    return name
+
+
 class PrinterService:
     """Owns the HTTP server thread, the mDNS advertiser and the printer object."""
 
@@ -184,6 +197,7 @@ class PrinterService:
         self.cfg = cfg
         self.queue = queue
         self.port = cfg.ipp_port
+        self.name = printer_display_name(cfg.printer_name)
         self.uuid = self._stable_uuid(cfg)
         ips = local_ipv4s() or ["127.0.0.1"]
         host = ips[0]
@@ -192,7 +206,7 @@ class PrinterService:
             self.uris.append(f"ipp://{ip}:{self.port}/ipp/print")
         self.web_url = f"http://{host}:{cfg.port}/"
         icon_urls = [f"http://{host}:{self.port}/icon-128.png", f"http://{host}:{self.port}/icon-512.png"]
-        self.info = A.PrinterInfo(cfg.printer_name, cfg.printer_location, self.uuid, self.uris, self.web_url,
+        self.info = A.PrinterInfo(self.name, cfg.printer_location, self.uuid, self.uris, self.web_url,
                                   icon_urls, paper=cfg.paper)
         self.printer = Printer(self.info, cfg.inbox_dir / "print", self._on_document,
                                first_job_id=self._first_job_id())

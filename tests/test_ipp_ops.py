@@ -102,3 +102,12 @@ def test_unknown_op_and_bad_format(tmp_path):
     assert r.code == O.DOC_FORMAT_ERROR
     assert p.handle(_req(O.VALIDATE_JOB, [("document-format", C.MIME, ["image/urf"])]), None).code == O.OK
     assert p.handle(_req(O.IDENTIFY_PRINTER), None).code == O.OK
+
+
+def test_printer_display_name(monkeypatch):
+    import socket
+    from recipelib.ipp.server import printer_display_name
+    monkeypatch.setattr(socket, "gethostname", lambda: "MacM5.local")
+    assert printer_display_name("Recipe Library") == "Recipe Library (MacM5)"
+    assert printer_display_name("Kitchen {host}") == "Kitchen MacM5"
+    assert printer_display_name("Grandma's Recipes") == "Grandma's Recipes"

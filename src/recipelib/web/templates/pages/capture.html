@@ -28,7 +28,7 @@
   <section class="panel">
     <h2>Print to the library</h2>
     {% if printer %}
-      <p>Look for the printer <strong>{{ cfg.printer_name }}</strong> on any device on this Wi-Fi and print the recipe page to it.</p>
+      <p>Look for the printer <strong>{{ printer.info.name }}</strong> on any device on this Wi-Fi and print the recipe page to it.</p>
       <p class="muted">Not showing up? Add it by address: <code>ipp://{{ host }}:{{ cfg.ipp_port }}/ipp/print</code></p>
     {% else %}
       <p class="muted">The virtual printer is off. Enable it in the config file (<code>printer_enabled = true</code>).</p>

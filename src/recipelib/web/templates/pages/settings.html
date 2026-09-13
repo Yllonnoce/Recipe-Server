@@ -12,7 +12,7 @@
       <tr><th>Library folder</th><td><code>{{ cfg.library_dir }}</code></td></tr>
       <tr><th>Inbox folder</th><td><code>{{ cfg.inbox_dir }}</code></td></tr>
       <tr><th>Web</th><td>http://{{ host }}:{{ cfg.port }}</td></tr>
-      <tr><th>Printer</th><td>{% if printer %}<strong>{{ cfg.printer_name }}</strong> at <code>ipp://{{ host }}:{{ cfg.ipp_port }}/ipp/print</code>{% else %}off{% endif %}</td></tr>
+      <tr><th>Printer</th><td>{% if printer %}<strong>{{ printer.info.name }}</strong> at <code>ipp://{{ host }}:{{ cfg.ipp_port }}/ipp/print</code>{% else %}off{% endif %}</td></tr>
       <tr><th>LLM</th><td>{{ cfg.ollama_model }} via {{ cfg.ollama_host }} ({{ 'on' if cfg.llm_enabled else 'off' }})</td></tr>
       <tr><th>OCR</th><td>{{ 'on' if cfg.ocr_enabled else 'off' }}</td></tr>
       <tr><th>Paper</th><td>{{ cfg.paper }}</td></tr>

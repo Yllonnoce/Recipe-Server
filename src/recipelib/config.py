@@ -57,7 +57,7 @@ class Settings(BaseSettings):
 
     # virtual printer
     printer_enabled: bool = True
-    printer_name: str = "Recipe Library"
+    printer_name: str = "Recipe Library"   # shown as "Recipe Library (<computer>)"; use {host} to place the name yourself
     printer_location: str = "Kitchen"
     ipp_port: int = 8631
     ipp_dump_dir: Path | None = None
@@ -135,7 +135,7 @@ def write_default_config(force: bool = False) -> Path:
         f"ocr_enabled = {str(s.ocr_enabled).lower()}\n\n"
         "# virtual printer (IPP + mDNS)\n"
         f"printer_enabled = {str(s.printer_enabled).lower()}\n"
-        f'printer_name = "{s.printer_name}"\n'
+        f'printer_name = "{s.printer_name}"   # devices see "Recipe Library (<computer name>)"; put {{host}} where you want the name\n'
         f'printer_location = "{s.printer_location}"\n'
         f"ipp_port = {s.ipp_port}\n\n"
         "# local LLM\n"
