@@ -95,7 +95,12 @@ class Advertiser:
 
     def _run(self) -> None:
         import logging as _logging
-        _logging.getLogger("zeroconf").setLevel(_logging.CRITICAL)   # its sendto tracebacks while Wi-Fi comes up are noise
+        import shutil
+        import sys
+        _logging.getLogger("zeroconf").setLevel(_logging.ERROR)      # keep real failures, drop the chatter
+        if sys.platform == "darwin" and shutil.which("dns-sd"):
+            self._run_dns_sd()          # macOS: announce through the system's Bonjour (immune to the Local Network block)
+            return
         # at boot the daemon can start before Wi-Fi is up; wait for an address
         waited = 0
         while not local_ipv4s() and waited < 120 and not self._stop.is_set():
