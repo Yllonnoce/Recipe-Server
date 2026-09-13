@@ -38,6 +38,22 @@ if [ "$(id -u)" = 0 ]; then
   exit 1
 fi
 
+# ---------------------------------------------------------------- repair root-owned leftovers
+# A previous run with sudo leaves caches and folders owned by root, which breaks
+# everything after. Hand them back to the user before touching them.
+BAD=""
+for d in "$HOME/.cache/uv" "$HOME/.local/bin/uv" "$HOME/.local/share/uv" "$HOME/.cache/ms-playwright" \
+         "$HOME/Library/Caches/ms-playwright" "$HOME/RecipeLibrary" "$HOME/.config/recipelib" \
+         "$HOME/Library/Application Support/recipelib" "$HERE/.venv"; do
+  [ -e "$d" ] || continue
+  if [ "$OS" = "Darwin" ]; then owner="$(stat -f %u "$d" 2>/dev/null)"; else owner="$(stat -c %u "$d" 2>/dev/null)"; fi
+  [ -n "$owner" ] && [ "$owner" != "$(id -u)" ] && BAD="$BAD \"$d\""
+done
+if [ -n "$BAD" ]; then
+  say "Some folders are owned by root (left by an earlier sudo run); handing them back to you"
+  eval "sudo chown -R \"$(id -un)\" $BAD" || { warn "could not change ownership; run: sudo chown -R $(id -un)$BAD"; exit 1; }
+fi
+
 # ---------------------------------------------------------------- uv + python
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 if ! have uv; then
