@@ -19,7 +19,7 @@
       {% if test is none %}not tested
       {% elif test.ok %}✅ Ollama {{ test.version }} at <code>{{ test.host }}</code>
         {% if has_model %}· model <strong>{{ cfg.ollama_model }}</strong> ready{% else %}· <strong>model {{ cfg.ollama_model }} is not on that machine</strong> (Pull model there){% endif %}
-      {% else %}⚠️ cannot reach <code>{{ test.host }}</code>: {{ test.error }}{% endif %}
+      {% else %}⚠️ cannot reach <code>{{ test.host }}</code>: {{ test.error }}{% if test.hint %}<br><strong>{{ test.hint }}</strong>{% endif %}{% endif %}
     </td></tr>
     {% if test and test.ok and test.models %}<tr><th>Models there</th><td>{{ test.models|join(', ') }}</td></tr>{% endif %}
     {% if pull.running or pull.done is not none %}

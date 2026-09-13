@@ -193,7 +193,15 @@ Ollama listens only on its own machine by default. On the machine that runs it:
   Environment Variables → add `OLLAMA_HOST` = `0.0.0.0`, then quit Ollama from the tray and
   start it again.
 
-Open TCP port 11434 on that machine's firewall for your private network. "Find Ollama on
+Open TCP port 11434 on that machine's firewall for your private network.
+
+**macOS as the client (the server runs on a Mac and Ollama elsewhere):** macOS's Local
+Network privacy blocks programs that haven't been allowed from reaching other devices, and
+the app's Python shows "No route to host" while `curl` works. Allow it under System
+Settings → Privacy & Security → Local Network ("python3"). If it isn't listed, run
+`sudo tccutil reset LocalNetwork`, then trigger the prompt with
+`.venv/bin/python -c "import httpx; print(httpx.get('http://<ollama-host>:11434/api/version').text)"`
+and click Allow. Restart the service afterwards. "Find Ollama on
 my network" in Settings scans the local network for machines that answer on that port, and
 Settings → Network (or `recipes scan`, optionally `--port 1234`) finds Ollama hosts, other
 Recipe Library servers and their printers in one go.

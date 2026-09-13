@@ -39,7 +39,18 @@ def test_host(host: str, timeout: float = 4.0) -> dict:
         out["ok"] = True
     except Exception as e:  # noqa: BLE001
         out["error"] = f"{type(e).__name__}: {str(e)[:120]}" if str(e) else type(e).__name__
+        out["hint"] = connection_hint(str(e))
     return out
+
+
+def connection_hint(err: str) -> str | None:
+    """Turn the classic macOS 'Local Network' refusal into advice."""
+    import sys
+    if sys.platform == "darwin" and ("Errno 65" in err or "No route to host" in err):
+        return ("macOS is blocking this program from talking to other devices on the network. "
+                "Open System Settings → Privacy & Security → Local Network and switch on 'python3' (or 'Python'). "
+                "If it is not listed, run in Terminal: sudo tccutil reset LocalNetwork, then try again and click Allow on the prompt.")
+    return None
 
 
 def has_model(models: list[str], want: str) -> bool:
