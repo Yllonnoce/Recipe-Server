@@ -79,6 +79,9 @@ async def lifespan(app: FastAPI):
     from .backup import AutoBackup
     auto_backup = AutoBackup(cfg.auto_backup_days, cfg.backup_keep)
     auto_backup.start()
+    from .mirror import Mirror
+    mirror = Mirror(cfg.mirror_of, cfg.mirror_interval_hours)
+    mirror.start()
     if cfg.llm_enabled and cfg.llm_keep_loaded:
         import threading
 
@@ -99,6 +102,7 @@ async def lifespan(app: FastAPI):
     finally:
         checker.stop()
         auto_backup.stop()
+        mirror.stop()
         if printer is not None:
             printer.stop()
         watcher.stop()

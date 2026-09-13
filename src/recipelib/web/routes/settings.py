@@ -249,3 +249,87 @@ def network_scan(request: Request, port: str = Form("")):
             ports = None
     found = netscan.scan(ports=ports)
     return templates.TemplateResponse(request, "partials/netscan.html", {"found": found, "port": port})
+
+
+# ---- backup server (mirror) -------------------------------------------------
+
+@router.get("/api/backup/info", name="api_backup_info")
+def api_backup_info(s: Session = Depends(get_db)):
+    """What a backup server would get: counts and version."""
+    from sqlalchemy import func, select
+
+    from ... import __version__
+    from ...db.models import Recipe
+    n = s.scalar(select(func.count()).select_from(Recipe).where(Recipe.deleted_at.is_(None))) or 0
+    return {"app": "recipelib", "version": __version__, "recipes": n}
+
+
+@router.get("/api/backup/latest", name="api_backup_latest")
+def api_backup_latest(s: Session = Depends(get_db)):
+    """A fresh backup zip. A recent one (under 30 minutes old) is reused only
+    when nothing in the library changed after it was written."""
+    import time
+    from datetime import datetime, timezone
+
+    from fastapi.responses import FileResponse
+    from sqlalchemy import func, select
+
+    from ... import backup as B
+    from ...db.models import Recipe
+    zips = sorted(B.backups_dir().glob("recipelib-*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)
+    latest_change = s.scalar(select(func.max(Recipe.updated_at))) or ""
+    p = None
+    if zips and time.time() - zips[0].stat().st_mtime < 1800:
+        made = datetime.fromtimestamp(zips[0].stat().st_mtime, timezone.utc).replace(microsecond=0).isoformat()
+        if not latest_change or latest_change <= made:
+            p = zips[0]
+    if p is None:
+        p = B.create_backup()
+    return FileResponse(p, media_type="application/zip", filename=p.name)
+
+
+def _mirror_ctx() -> dict:
+    from ... import mirror
+    return {"cfg": get_settings(), "mirror": mirror.STATE}
+
+
+@router.get("/partials/mirror", name="mirror_partial")
+def mirror_partial(request: Request):
+    return templates.TemplateResponse(request, "partials/mirror.html", _mirror_ctx())
+
+
+@router.post("/settings/mirror", name="settings_mirror_save")
+def mirror_save(request: Request, mirror_of: str = Form(""), mirror_interval_hours: str = Form("24"), mirror_mode: str = Form("merge")):
+    from ... import mirror
+    from ...cli import config_set
+    url = mirror.normalize_url(mirror_of)
+    try:
+        hours = float(mirror_interval_hours or 24)
+    except ValueError:
+        hours = 24.0
+    config_set("mirror_of", url)
+    config_set("mirror_interval_hours", str(hours))
+    config_set("mirror_mode", "replace" if mirror_mode == "replace" else "merge")
+    get_settings(reload=True)
+    return templates.TemplateResponse(request, "partials/mirror.html", {**_mirror_ctx(), "saved": True})
+
+
+@router.post("/settings/mirror/test", name="settings_mirror_test")
+def mirror_test(request: Request, mirror_of: str = Form("")):
+    from ... import mirror
+    ctx = _mirror_ctx()
+    try:
+        info = mirror.primary_info(mirror_of or get_settings().mirror_of)
+        ctx["test"] = f"✅ {mirror.normalize_url(mirror_of or get_settings().mirror_of)} is a Recipe Library v{info.get('version')} with {info.get('recipes')} recipes"
+    except Exception as e:  # noqa: BLE001
+        ctx["test"] = f"⚠️ not a reachable Recipe Library: {type(e).__name__}: {str(e)[:120]}"
+    return templates.TemplateResponse(request, "partials/mirror.html", ctx)
+
+
+@router.post("/settings/mirror/sync", name="settings_mirror_sync")
+def mirror_sync(request: Request):
+    from ... import mirror
+    mirror.sync_async()
+    import time
+    time.sleep(0.3)
+    return templates.TemplateResponse(request, "partials/mirror.html", _mirror_ctx())

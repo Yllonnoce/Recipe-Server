@@ -169,11 +169,12 @@ def restore(zip_path: Path, mode: str = "merge", overwrite: bool = False) -> Res
                     elif br["source_url_norm"] and br["source_url_norm"] in local_by_url:
                         match = local_by_url[br["source_url_norm"]]
                     if match is not None:
-                        if not overwrite:
+                        old = s.get(Recipe, match)
+                        unchanged = old is not None and (br.get("updated_at") or "") <= (old.updated_at or "")
+                        if not overwrite or unchanged:
                             stats.skipped += 1
                             id_map[br["id"]] = match
                             continue
-                        old = s.get(Recipe, match)
                         if old is not None:
                             s.delete(old)
                             s.flush()

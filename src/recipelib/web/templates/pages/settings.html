@@ -45,6 +45,11 @@
     </form>
     <div id="netscan"></div>
   </section>
+  <section class="panel wide" id="mirror-panel">
+    <h2>Backup server</h2>
+    <p class="muted">Make this Recipe Library a standing copy of another one: it pulls a fresh backup from the main server on a schedule and merges it in (the main server's version wins). If the main server ever dies, this one already has every recipe, PDF and picture. Leave the address empty on the main server itself.</p>
+    <div hx-get="{{ request.url_for('mirror_partial') }}" hx-trigger="load" hx-swap="outerHTML"><span class="spin"></span></div>
+  </section>
   <section class="panel wide" id="backups">
     <h2>Backups</h2>
     <p class="muted">A backup is one zip with the database and every PDF and picture. One is made automatically every {{ cfg.auto_backup_days|int if cfg.auto_backup_days == cfg.auto_backup_days|int else cfg.auto_backup_days }} day(s), keeping the newest {{ cfg.backup_keep }}, in <code>{{ cfg.library_dir }}/backups</code>. Copy them somewhere else too.</p>

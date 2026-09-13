@@ -1,0 +1,24 @@
+<div id="mirror" {% if mirror.running %}hx-get="{{ request.url_for('mirror_partial') }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <form hx-post="{{ request.url_for('settings_mirror_save') }}" hx-target="#mirror" hx-swap="outerHTML" class="stack">
+    <div class="row">
+      <label>Copy from (the main server) <input name="mirror_of" value="{{ cfg.mirror_of }}" placeholder="http://macm5.local  (empty = this is not a backup server)"></label>
+      <label>Every (hours) <input name="mirror_interval_hours" value="{{ cfg.mirror_interval_hours|int if cfg.mirror_interval_hours == cfg.mirror_interval_hours|int else cfg.mirror_interval_hours }}" inputmode="decimal"></label>
+      <label>Mode <select name="mirror_mode"><option value="merge" {{ 'selected' if cfg.mirror_mode != 'replace' }}>merge: take everything from the main server, keep local extras</option><option value="replace" {{ 'selected' if cfg.mirror_mode == 'replace' }}>replace: exact copy of the main server</option></select></label>
+    </div>
+    <div class="actions">
+      <button class="btn primary" type="submit">Save</button>
+      <button class="btn" type="button" hx-post="{{ request.url_for('settings_mirror_test') }}" hx-include="closest form" hx-target="#mirror" hx-swap="outerHTML">Test</button>
+      <button class="btn" type="button" hx-post="{{ request.url_for('settings_mirror_sync') }}" hx-target="#mirror" hx-swap="outerHTML" {{ 'disabled' if mirror.running or not cfg.mirror_of }}>Sync now</button>
+      {% if saved %}<span class="muted">saved</span>{% endif %}
+    </div>
+  </form>
+  <table class="kv">
+    {% if test %}<tr><th>Test</th><td>{{ test }}</td></tr>{% endif %}
+    <tr><th>Status</th><td>
+      {% if mirror.running %}<span class="spin"></span> syncing from {{ mirror.source }}…
+      {% elif mirror.result %}{{ '✅' if mirror.last_ok else '⚠️' }} {{ mirror.result }}
+      {% elif cfg.mirror_of %}not synced yet (first pull runs a few minutes after startup, then every {{ cfg.mirror_interval_hours|int }} h)
+      {% else %}off{% endif %}
+    </td></tr>
+  </table>
+</div>

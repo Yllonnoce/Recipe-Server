@@ -58,13 +58,22 @@ def test_backup_restore_merge_and_replace(client, library, tmp_path):
     stats = B.restore(zips[0], mode="merge")
     assert stats.added == 0 and stats.skipped == 2
 
-    # edit locally, merge with overwrite: backup version wins
-    client.post(f"/recipes/{b}/edit", data={"title": "Banana Bread (mine)", "ingredients": "3 bananas", "steps": "Mash."}, follow_redirects=False)
+    # overwrite with nothing newer in the backup: nothing replaced (no daily churn on a mirror)
     stats = B.restore(zips[0], mode="merge", overwrite=True)
-    assert stats.replaced == 2
+    assert stats.replaced == 0 and stats.skipped == 2
+    # edit locally, then a backup made later wins over the local edit
+    import time; time.sleep(1.1)
+    client.post(f"/recipes/{b}/edit", data={"title": "Banana Bread (mine)", "ingredients": "3 bananas", "steps": "Mash."}, follow_redirects=False)
+    time.sleep(1.1)
+    newer = B.create_backup(tmp_path / "newer.zip")
+    client.post(f"/recipes/{b}/edit", data={"title": "Banana Bread (mine again)", "ingredients": "3 bananas", "steps": "Mash."}, follow_redirects=False)
+    stats = B.restore(zips[0], mode="merge", overwrite=True)      # old backup: local is newer -> kept
+    assert stats.replaced == 0
+    stats = B.restore(newer, mode="merge", overwrite=True)        # but it can't be newer than 'newer'... local edited after -> kept too
+    assert stats.replaced == 0
     with session_scope() as s:
         titles = sorted(r.title for r in s.scalars(select(Recipe).where(Recipe.deleted_at.is_(None))))
-        assert titles == ["Apple Pie", "Banana Bread"]
+        assert titles == ["Apple Pie", "Banana Bread (mine again)"]
 
     # replace via the page
     _add(client, tmp_tmp := tmp_path, "Cherry Tart")

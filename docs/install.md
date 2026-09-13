@@ -136,6 +136,19 @@ To remove: Linux `systemctl --user disable --now recipelib`; macOS
 remove the service, firewall rules, environment and config; add `--purge` / `/purge` to
 also delete the library. Your recipes otherwise stay in `~/RecipeLibrary`.
 
+## Backup server (a second machine that mirrors the first)
+
+Install Recipe Library on a second machine as usual, then in its Settings → "Backup server"
+enter the main server's address (for example `http://macm5.local`), click Test, Save, and
+"Sync now". From then on it pulls a fresh backup from the main server every 24 hours
+(`mirror_interval_hours`) and merges it in, the main server's version winning on conflicts;
+`mirror_mode = "replace"` makes it an exact copy instead. Or run `recipes sync-from
+http://macm5.local` by hand or from cron. If the main server dies, the backup server already
+has everything and can be used directly (clear `mirror_of` so it stops trying to pull).
+
+Anyone on the network can download a backup from a Recipe Library (`/api/backup/latest`),
+the same as the Backups page; keep the servers on a private network.
+
 ## Backups and restore
 
 A backup is one zip with the database and every PDF and picture. The server makes one

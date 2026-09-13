@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "info"
     auto_backup_days: float = 1.0       # 0 turns automatic backups off
+    mirror_of: str = ""                 # backup server: address of the primary Recipe Library to copy from
+    mirror_interval_hours: float = 24.0 # how often to pull from it (0 = manual only)
+    mirror_mode: str = "merge"          # merge (add/update from the primary, keep local extras) | replace (exact copy)
     backup_keep: int = 7                # newest zips to keep in RecipeLibrary/backups
     ssl_certfile: Path | None = None    # set both to serve https (needed for the tablet wake lock)
     ssl_keyfile: Path | None = None
