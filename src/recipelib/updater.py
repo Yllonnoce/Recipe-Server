@@ -21,7 +21,49 @@ from pathlib import Path
 from . import __version__
 
 log = logging.getLogger(__name__)
-STATE = {"checked_at": 0.0, "behind": 0, "remote": None, "error": None, "updating": False, "last_log": ""}
+STATE = {"checked_at": 0.0, "behind": 0, "remote": None, "error": None, "updating": False, "last_log": "",
+         "checking": False, "step": None, "result": None, "started_at": 0.0}
+STEPS = [("pull", "Download"), ("deps", "Dependencies"), ("browser", "Browser"), ("migrate", "Database"), ("restart", "Restart")]
+BOOT_TIME = time.time()
+
+
+def _marker() -> Path:
+    from .config import get_settings
+    return get_settings().library_dir / "tmp" / "update-in-progress.json"
+
+
+def finished_update() -> dict | None:
+    """After a restart: the marker the previous process left tells the page
+    the update it was watching has completed. Read once, then removed."""
+    m = _marker()
+    if not m.exists():
+        return None
+    try:
+        import json
+        data = json.loads(m.read_text())
+    except Exception:  # noqa: BLE001
+        data = {}
+    if data.get("started", 0) > BOOT_TIME:
+        return None                   # still the process that started the update
+    try:
+        m.unlink()
+    except OSError:
+        pass
+    v = current()
+    return {"from": data.get("from"), "to": v.commit, "ok": True}
+
+
+def check_async() -> None:
+    if STATE["checking"]:
+        return
+    STATE["checking"] = True
+
+    def run():
+        try:
+            check()
+        finally:
+            STATE["checking"] = False
+    threading.Thread(target=run, name="update-check-now", daemon=True).start()
 
 
 def repo_root() -> Path | None:
@@ -117,7 +159,8 @@ def update(deps: bool = True, browser: bool = True, restart: bool = True, logger
     root = repo_root()
     if root is None:
         return False, "not a git checkout"
-    STATE["updating"] = True
+    STATE.update(updating=True, step="pull", result=None, started_at=time.time(), last_log="")
+    from_commit = current().commit
     try:
         rc, out = _git(["status", "--porcelain", "--untracked-files=no"], timeout=10)
         if rc == 0 and out.strip():
@@ -126,7 +169,9 @@ def update(deps: bool = True, browser: bool = True, restart: bool = True, logger
         rc, out = _git(["pull", "--ff-only", "--quiet"], timeout=120)
         say(out or "up to date")
         if rc != 0:
+            STATE["result"] = "failed"
             return False, "\n".join(lines)
+        STATE["step"] = "deps"
         if deps:
             uv = _uv()
             if uv:
@@ -137,27 +182,42 @@ def update(deps: bool = True, browser: bool = True, restart: bool = True, logger
             r = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=900)
             if r.returncode != 0:
                 say((r.stdout + r.stderr)[-1500:])
+                STATE["result"] = "failed"
                 return False, "\n".join(lines)
+        STATE["step"] = "browser"
         if browser:
             pw = Path(sys.executable).parent / ("playwright.exe" if sys.platform == "win32" else "playwright")
             if pw.exists():
                 say("checking the Chromium download")
                 subprocess.run([str(pw), "install", "chromium"], cwd=root, capture_output=True, text=True, timeout=900)
+        STATE["step"] = "migrate"
         say("running database migrations")
         from .config import get_settings
         from .db.migrate import migrate
         migrate(get_settings().db_path)
         say(f"now at {current().commit or '?'}")
-        STATE.update(behind=0)
+        STATE.update(behind=0, result="ok")
         if restart:
+            STATE["step"] = "restart"
             say("restarting the server")
+            try:
+                import json
+                _marker().parent.mkdir(parents=True, exist_ok=True)
+                _marker().write_text(json.dumps({"started": time.time(), "from": from_commit}))
+            except OSError:
+                pass
+            STATE["last_log"] = "\n".join(lines)
             threading.Timer(1.0, restart_server).start()
+            return True, "\n".join(lines)
+        STATE["step"] = "done"
         return True, "\n".join(lines)
     except Exception as e:  # noqa: BLE001
         say(f"update failed: {type(e).__name__}: {e}")
+        STATE["result"] = "failed"
         return False, "\n".join(lines)
     finally:
-        STATE["updating"] = False
+        if STATE.get("step") != "restart":
+            STATE["updating"] = False
         STATE["last_log"] = "\n".join(lines)
 
 

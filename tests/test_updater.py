@@ -54,3 +54,24 @@ def test_not_a_git_checkout(monkeypatch):
     assert "git" in updater.check()["error"]
     ok, log = updater.update(deps=False, browser=False, restart=False)
     assert not ok
+
+
+def test_status_partial_and_restart_marker(client, library, monkeypatch):
+    import json, time
+    from recipelib import updater
+    html = client.get("/partials/update-status").text
+    assert 'id="update-status"' in html and "Check for updates" in html
+    # while checking, the partial polls
+    monkeypatch.setitem(updater.STATE, "checking", True)
+    assert 'hx-trigger="every 2s"' in client.get("/partials/update-status").text
+    monkeypatch.setitem(updater.STATE, "checking", False)
+    assert 'hx-trigger="every 2s"' not in client.get("/partials/update-status").text
+    # a marker left by the previous process reads as "updated ... up to date" once, then is gone
+    m = library.library_dir / "tmp" / "update-in-progress.json"
+    m.parent.mkdir(parents=True, exist_ok=True)
+    m.write_text(json.dumps({"started": time.time() - 100, "from": "abc1234"}))
+    monkeypatch.setattr(updater, "BOOT_TIME", time.time())
+    html = client.get("/partials/update-status").text
+    assert "Updated" in html and "abc1234" in html and "Up to date" in html
+    assert not m.exists()
+    assert "Updated" not in client.get("/partials/update-status").text

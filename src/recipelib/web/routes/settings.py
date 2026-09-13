@@ -19,7 +19,7 @@ def settings(request: Request, s: Session = Depends(get_db)):
     from ... import updater
     from ... import backup as B
     return templates.TemplateResponse(request, "pages/settings.html", {
-        "ver": updater.current(), "upd": updater.STATE, "backups": B.list_backups(), "bk": B.STATE,
+        **_update_ctx(), "backups": B.list_backups(), "bk": B.STATE,
         "cfg": get_settings(), "config_path": config_path(), "version": __version__,
         "checks": run_checks(quick=True), "message": request.query_params.get("m"),
         "printer": getattr(request.app.state, "printer", None), "host": request.url.hostname,
@@ -42,9 +42,37 @@ def categorize(request: Request, s: Session = Depends(get_db)):
     return RedirectResponse(str(request.url_for("settings")) + f"?m=Categories assigned to {n} recipes", status_code=303)
 
 
+def _update_ctx() -> dict:
+    from ... import updater
+    st = updater.STATE
+    done = updater.finished_update()
+    steps = []
+    cur = st.get("step")
+    idx = [k for k, _ in updater.STEPS].index(cur) if cur in [k for k, _ in updater.STEPS] else -1
+    for i, (key, label) in enumerate(updater.STEPS):
+        state = "done" if (i < idx or st.get("result") == "ok" and cur == "done") else ("current" if i == idx else "pending")
+        if st.get("result") == "failed" and i == idx:
+            state = "failed"
+        steps.append({"key": key, "label": label, "state": state})
+    busy = bool(st.get("updating") or st.get("checking"))
+    return {"ver": updater.current(), "upd": st, "steps": steps, "busy": busy, "just_updated": done}
+
+
+def _status_response(request: Request):
+    return templates.TemplateResponse(request, "partials/update_status.html", _update_ctx())
+
+
+@router.get("/partials/update-status", name="update_status")
+def update_status(request: Request):
+    return _status_response(request)
+
+
 @router.post("/settings/update/check", name="settings_update_check")
 def update_check(request: Request):
     from ... import updater
+    if request.headers.get("HX-Request") == "true":
+        updater.check_async()
+        return _status_response(request)
     r = updater.check()
     if r["error"]:
         msg = "Update check: " + r["error"]
@@ -64,7 +92,11 @@ def update_run(request: Request):
         return RedirectResponse(str(request.url_for("settings")) + "?m=Not installed from git; re-run the installer with a fresh download", status_code=303)
     if not updater.STATE.get("updating"):
         threading.Thread(target=updater.update, kwargs={"restart": True}, name="updater", daemon=True).start()
-    return RedirectResponse(str(request.url_for("settings")) + "?m=Updating… the server restarts itself when done; reload this page in a minute", status_code=303)
+        import time
+        time.sleep(0.2)
+    if request.headers.get("HX-Request") == "true":
+        return _status_response(request)
+    return RedirectResponse(str(request.url_for("settings")) + "?m=Updating… the server restarts itself when done", status_code=303)
 
 
 # ---- backups ---------------------------------------------------------------
