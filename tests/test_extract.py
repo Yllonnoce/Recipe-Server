@@ -33,3 +33,26 @@ def test_choose_window_prefers_recipe_looking_text():
     text = filler * 10 + recipe * 3 + filler * 10
     w = choose_window(text, limit=9000)
     assert len(w) <= 9000 and "2 cups flour" in w
+
+
+def test_llm_sections_are_flattened_to_groups(library, monkeypatch):
+    import json
+    from recipelib.extract import llm
+    reply = {"is_recipe": True, "title": "Chowder", "description": None, "language": "en", "confidence": 0.9,
+             "ingredient_sections": [{"heading": "Lobster Stock", "ingredients": [{"raw": "2 lobster shells", "name": "lobster shells", "optional": False}]},
+                                     {"heading": "Chowder", "ingredients": [{"raw": "4 slices bacon", "name": "bacon", "optional": False}]}],
+             "step_sections": [{"heading": "Lobster Stock", "steps": [{"text": "Simmer the shells."}]},
+                               {"heading": "Chowder", "steps": [{"text": "Cook the bacon."}]}]}
+
+    class FakeClient:
+        def chat(self, **kw):
+            return {"message": {"content": json.dumps(reply)}}
+    monkeypatch.setattr(llm, "_client", lambda: FakeClient())
+    d = llm.extract_recipe("Lobster Stock\n2 lobster shells\nChowder\n4 slices bacon\nSimmer the shells. Cook the bacon.")
+    assert [i["group"] for i in d["ingredients"]] == ["Lobster Stock", "Chowder"]
+    assert [s["group"] for s in d["steps"]] == ["Lobster Stock", "Chowder"]
+    # a single unnamed section means no groups at all
+    reply["ingredient_sections"] = [{"heading": None, "ingredients": reply["ingredient_sections"][0]["ingredients"]}]
+    reply["step_sections"] = [{"heading": None, "steps": [{"text": "Simmer."}]}]
+    d = llm.extract_recipe("Simple stock\n2 lobster shells\n8 cups water\nSimmer the shells in the water for an hour.")
+    assert all(i["group"] is None for i in d["ingredients"]) and all(s["group"] is None for s in d["steps"])

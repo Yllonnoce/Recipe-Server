@@ -22,7 +22,31 @@ def looks_like_heading(line: str) -> bool:
         return False
     if _QTY_START.match(s) or _SENTENCE_END.search(line.strip()) and not line.strip().endswith(":"):
         return False
-    return bool(line.strip().endswith(":") or _HEADING_START.match(s) or (s[:1].isupper() and len(s.split()) <= 4 and not re.search(r"\d", s)))
+    words = s.split()
+    all_caps = s.isupper() and any(ch.isalpha() for ch in s)
+    title_case = len(words) <= 5 and all(w[:1].isupper() or w.lower() in ("the", "and", "of", "for", "a", "&") for w in words)
+    return bool(line.strip().endswith(":") or _HEADING_START.match(s) or all_caps
+                or (title_case and not re.search(r"\d", s) and s.lower() not in ("ingredients", "directions", "instructions", "method")))
+
+
+def _find_line(lines: list[str], raw: str, name: str | None = None) -> int | None:
+    """Index of the text line that carries this ingredient: exact start match first,
+    then the ingredient's name inside a quantity-looking line."""
+    key = _norm(raw)[:40]
+    if key:
+        for i, ln in enumerate(lines):
+            if _norm(ln)[:40] == key:
+                return i
+        for i, ln in enumerate(lines):
+            n = _norm(ln)
+            if len(key) >= 12 and (n.startswith(key[:24]) or key[:24] in n):
+                return i
+    nm = _norm(name or "")
+    if len(nm) >= 4:
+        for i, ln in enumerate(lines):
+            if nm in _norm(ln) and (_QTY_START.match(ln) or len(ln) < 60):
+                return i
+    return None
 
 
 def _norm(s: str) -> str:
@@ -137,11 +161,7 @@ def infer_ingredient_groups(items: list[dict], text: str) -> list[dict]:
     if not items or any(it.get("group") for it in items):
         return items
     lines = [ln.strip() for ln in (text or "").splitlines()]
-    positions: list[int | None] = []
-    for it in items:
-        key = _norm(it.get("raw", ""))[:40]
-        pos = next((i for i, ln in enumerate(lines) if key and _norm(ln)[:40] == key), None)
-        positions.append(pos)
+    positions: list[int | None] = [_find_line(lines, it.get("raw", ""), it.get("name")) for it in items]
     located = [p for p in positions if p is not None]
     if len(located) < 2:
         return items

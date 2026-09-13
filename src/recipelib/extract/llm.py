@@ -107,8 +107,16 @@ def extract_recipe(text: str, title_hint: str | None = None, source: str | None 
             continue
         out = draft.model_dump()
         out["method"] = "llm"
-        if not draft.is_recipe:
-            return out
+        out["ingredients"] = [dict(i, group=(sec.get("heading") or None))
+                              for sec in out.pop("ingredient_sections", []) for i in sec.get("ingredients", [])]
+        out["steps"] = [dict(st, group=(sec.get("heading") or None))
+                        for sec in out.pop("step_sections", []) for st in sec.get("steps", [])]
+        if len({i["group"] for i in out["ingredients"]}) == 1:
+            for i in out["ingredients"]:
+                i["group"] = None
+        if len({st["group"] for st in out["steps"]}) == 1:
+            for st in out["steps"]:
+                st["group"] = None
         return out
     return None
 
