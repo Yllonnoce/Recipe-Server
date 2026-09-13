@@ -367,6 +367,11 @@ def stage_normalize(ctx: Ctx):
         r.language = d.get("language") or r.language
         r.confidence = _num(d.get("confidence"))
         r.extraction_method = d.get("method") or "llm"
+        from ..extract.postprocess import clean_ingredients, infer_ingredient_groups, infer_step_groups
+        d["ingredients"] = clean_ingredients([dict(x) for x in (d.get("ingredients") or []) if isinstance(x, dict)])
+        d["ingredients"] = infer_ingredient_groups(d["ingredients"], "\n".join(ctx.page_texts))
+        d["steps"] = infer_step_groups([dict(x) if isinstance(x, dict) else {"text": str(x)} for x in (d.get("steps") or [])],
+                                       "\n".join(ctx.page_texts), [x.get("group") for x in d["ingredients"]])
         ing_rows = []
         for it in d.get("ingredients") or []:
             raw = (it.get("raw") or it.get("name") or "").strip()

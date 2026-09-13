@@ -248,7 +248,7 @@ def restart_server() -> None:
 class Checker:
     """Background daily check so the header can show an 'update available' badge."""
 
-    def __init__(self, interval: float = 24 * 3600):
+    def __init__(self, interval: float = 6 * 3600):
         self.interval = interval
         self._stop = threading.Event()
         self._t: threading.Thread | None = None

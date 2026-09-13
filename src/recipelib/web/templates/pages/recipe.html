@@ -43,6 +43,7 @@
         <a class="btn" href="{{ request.url_for('recipe_edit', recipe_id=r.id) }}">✎ Edit</a>
         {% include "partials/fav_button.html" %}
         <a class="btn" href="{{ request.url_for('recipe_file', recipe_id=r.id) }}?dl=1&v={{ r.pdf_asset_id }}">⬇ PDF</a>
+        {% if r.pdf_asset_id and r.status != 'processing' %}<form method="post" action="{{ request.url_for('recipe_reextract', recipe_id=r.id) }}" onsubmit="return confirm('Read the PDF again and rebuild the ingredients and steps? Your photo, tags and notes are kept; hand edits to ingredients and steps are replaced.')"><button class="btn" title="Run the extraction again">↻ Re-extract</button></form>{% endif %}
         <form method="post" action="{{ request.url_for('recipe_delete', recipe_id=r.id) }}" onsubmit="return confirm('Delete this recipe? The PDF stays in the assets folder.')"><button class="btn danger">Delete</button></form>
       </div>
       {% if r.ingredients %}

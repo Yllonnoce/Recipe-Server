@@ -75,3 +75,14 @@ def test_status_partial_and_restart_marker(client, library, monkeypatch):
     assert "Updated" in html and "abc1234" in html and "Up to date" in html
     assert not m.exists()
     assert "Updated" not in client.get("/partials/update-status").text
+
+
+def test_update_banner_on_every_page(client, monkeypatch):
+    from recipelib import updater
+    assert "A new version" not in client.get("/").text
+    monkeypatch.setitem(updater.STATE, "behind", 2)
+    monkeypatch.setitem(updater.STATE, "remote", "abc1234")
+    html = client.get("/shopping").text
+    assert "A new version of Recipe Library is available (2 changes)" in html and "Update now" in html
+    monkeypatch.setitem(updater.STATE, "updating", True)
+    assert "A new version" not in client.get("/").text

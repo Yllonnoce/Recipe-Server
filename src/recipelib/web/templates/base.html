@@ -29,6 +29,15 @@
     <button class="fs" type="button" id="fsBtn" title="Full screen for this page. For full screen that stays on, add the app to your home screen.">&#x26F6;</button>
   </nav>
 </header>
+{% if update_state.behind and not update_state.updating %}
+<div class="update-banner" id="updateBanner">
+  <span>🆕 A new version of Recipe Library is available ({{ update_state.behind }} change{{ 's' if update_state.behind != 1 }}).</span>
+  <form method="post" action="{{ request.url_for('settings_update_run') }}" onsubmit="return confirm('Install the update and restart the server? It takes about a minute.')"><button class="btn small primary">Update now</button></form>
+  <a class="btn small" href="{{ request.url_for('settings') }}#update-status">Details</a>
+  <button class="dismiss" type="button" title="Hide until the next version" onclick="try{localStorage.setItem('rl_update_seen','{{ update_state.remote }}')}catch(e){};this.parentElement.hidden=true">✕</button>
+</div>
+<script>try{ if (localStorage.getItem('rl_update_seen') === '{{ update_state.remote }}') document.getElementById('updateBanner').hidden = true; }catch(e){}</script>
+{% endif %}
 <main class="wrap">
 {% block content %}{% endblock %}
 </main>

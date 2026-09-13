@@ -8,7 +8,7 @@ from ..domain.categories import NAMES as CATEGORY_NAMES
 
 
 class IngredientDraft(BaseModel):
-    group: str | None = Field(None, description="Sub-heading this ingredient sits under, e.g. 'For the sauce', else null")
+    group: str | None = Field(None, description="The section heading this ingredient is listed under, copied as written (e.g. 'For the stock', 'Chowder', 'Topping'); null only when the recipe has a single undivided ingredient list")
     raw: str = Field(..., description="The ingredient line copied exactly as written in the text")
     quantity: float | None = Field(None, description="Amount as a decimal number (1/2 -> 0.5), or null")
     quantity_max: float | None = Field(None, description="Upper amount when a range is given (2-3 -> 3), else null")
@@ -19,7 +19,7 @@ class IngredientDraft(BaseModel):
 
 
 class StepDraft(BaseModel):
-    group: str | None = Field(None, description="Sub-heading this step sits under, else null")
+    group: str | None = Field(None, description="The section heading this step belongs to, copied as written (e.g. 'Make the stock', 'Chowder'); null only when the steps are one undivided list")
     text: str = Field(..., description="One instruction step, in the original wording")
 
 
@@ -46,6 +46,13 @@ cookbook page or note, and return exactly one recipe as JSON matching the given 
 
 Rules:
 - Extract the main recipe only. Ignore ads, comments, navigation, related recipes and page boilerplate.
+- SECTIONS AND ORDER MATTER. Many recipes are made of parts (a stock, a sauce, a filling, a topping, a
+  marinade) each with its own ingredients and steps under a heading. Keep every part as its own section:
+  put the heading in "group" on each of its ingredients and steps, keep the parts in the order the text
+  presents them, and keep the ingredients and steps inside each part in their original order. Never merge
+  the parts into one list and never reorder steps.
+- When ingredients are listed in sections but the steps are not (or the other way round), still label the
+  side that has headings and leave "group" null on the other.
 - Copy every ingredient line verbatim into "raw" before splitting it into quantity, unit, name, preparation.
 - Never invent ingredients or steps that are not in the text. If something is unreadable, leave it out.
 - Keep the original language and wording. Fractions become decimals (1/2 -> 0.5, 1 1/2 -> 1.5).

@@ -99,8 +99,10 @@ git clone https://github.com/Yllonnoce/Recipe-Server.git HomeServer && cd HomeSe
 Later, any of these pulls the newest version, installs new dependencies, runs database
 migrations and restarts the server:
 
-- **Settings page** → "Check for updates" / "Update now". A small "update" badge appears next
-  to Settings in the header when a newer version has been published (checked once a day).
+- **Settings page** → "Check for updates" / "Update now". The server checks every six hours;
+  when a newer version has been published, a banner with an "Update now" button appears at the
+  top of every page (dismiss it and it stays hidden until the next version) and a small "update"
+  badge shows next to Settings.
 - `recipes update` from a terminal (`recipes update --check` only reports).
 - Re-running `./install.sh` / `install.bat`, which also upgrades in place.
 
