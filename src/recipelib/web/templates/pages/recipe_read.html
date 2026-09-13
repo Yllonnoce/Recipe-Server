@@ -138,7 +138,7 @@
 <script src="{{ request.url_for('static', path='reader/page-flip.browser.js') }}"></script>
 <script type="module">
   import * as pdfjsLib from "{{ request.url_for('static', path='reader/pdfjs/pdf.min.mjs') }}";
-  import { RecipeReader } from "{{ request.url_for('static', path='reader/recipe_reader.js') }}";
+  import { RecipeReader } from "{{ request.url_for('static', path='reader/recipe_reader.js') }}?v={{ static_v }}";
   pdfjsLib.GlobalWorkerOptions.workerSrc = "{{ request.url_for('static', path='reader/pdfjs/pdf.worker.min.mjs') }}";
   new RecipeReader(pdfjsLib, {
     url: "{{ request.url_for('recipe_file', recipe_id=r.id) }}",

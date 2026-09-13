@@ -9,6 +9,21 @@ from logging.handlers import RotatingFileHandler
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
+
+
+class _Static(StaticFiles):
+    """Own scripts/styles change with every update: make browsers revalidate
+    them (cheap 304s). Vendored libraries under reader/ and vendor/ are immutable."""
+
+    def file_response(self, *args, **kwargs) -> Response:
+        resp = super().file_response(*args, **kwargs)
+        path = str(args[0]) if args else ""
+        if "/reader/" in path or "/vendor/" in path or "/icons/" in path:
+            resp.headers["Cache-Control"] = "public, max-age=604800"
+        else:
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
 
 from . import __version__
 from .capture.queue import JobQueue, set_queue
@@ -108,7 +123,7 @@ def _startup_housekeeping() -> None:
 def create_app() -> FastAPI:
     app = FastAPI(title="Recipe Library", version=__version__, lifespan=lifespan, docs_url="/api/docs")
     static_dir = str(resources.files("recipelib.web") / "static")
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    app.mount("/static", _Static(directory=static_dir), name="static")
 
     from .web.routes import assets, capture, cook, library, mealplan, reader, recipe, settings, shopping
     for mod in (library, recipe, reader, cook, capture, assets, settings, shopping, mealplan):

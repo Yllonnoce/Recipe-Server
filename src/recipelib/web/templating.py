@@ -30,3 +30,16 @@ templates.env.globals["status_label"] = {
 
 from .. import updater  # noqa: E402
 templates.env.globals["update_state"] = updater.STATE
+
+
+def _static_version() -> str:
+    from .. import __version__
+    try:
+        from .. import updater
+        c = updater.current().commit
+    except Exception:  # noqa: BLE001
+        c = None
+    return f"{__version__}-{c}" if c else __version__
+
+
+templates.env.globals["static_v"] = _static_version()

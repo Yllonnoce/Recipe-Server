@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ r.title }} — Recipe Library{% endblock %}
-{% block head %}<script src="{{ request.url_for('static', path='scale.js') }}" defer></script>{% endblock %}
+{% block head %}<script src="{{ request.url_for('static', path='scale.js') }}?v={{ static_v }}" defer></script>{% endblock %}
 {% block content %}
 <article class="recipe">
   <header class="recipe-head">
