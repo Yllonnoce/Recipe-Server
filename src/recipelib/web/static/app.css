@@ -290,3 +290,4 @@ ol.progress li.failed .dot { background: var(--bad); border-color: var(--bad); }
 .update-banner span { flex: 1; min-width: 200px; }
 .update-banner form { margin: 0; }
 .update-banner .dismiss { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 1em; }
+.htmx-indicator { display: none; } .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline; }

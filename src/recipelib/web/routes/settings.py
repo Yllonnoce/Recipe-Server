@@ -180,3 +180,55 @@ def shrink_files(request: Request):
                 SHRINK["running"] = False
         threading.Thread(target=run, name="shrink", daemon=True).start()
     return RedirectResponse(str(request.url_for("settings")) + "?m=Shrinking stored files in the background; the result shows under Maintenance when done", status_code=303)
+
+
+# ---- Ollama (local or on another machine) ---------------------------------
+
+def _ollama_ctx(test: dict | None = None, scan: list | None = None) -> dict:
+    from ... import llmhost
+    cfg = get_settings()
+    return {"cfg": cfg, "test": test, "scan": scan, "pull": llmhost.PULL,
+            "has_model": llmhost.has_model(test["models"], cfg.ollama_model) if test and test.get("ok") else None}
+
+
+@router.get("/partials/ollama", name="ollama_partial")
+def ollama_partial(request: Request):
+    from ... import llmhost
+    cfg = get_settings()
+    return templates.TemplateResponse(request, "partials/ollama.html", _ollama_ctx(test=llmhost.test_host(cfg.ollama_host, timeout=2.5)))
+
+
+@router.post("/settings/ollama", name="settings_ollama_save")
+def ollama_save(request: Request, host: str = Form(""), model: str = Form("")):
+    from ... import llmhost
+    llmhost.save(host, model or get_settings().ollama_model)
+    cfg = get_settings()
+    t = llmhost.test_host(cfg.ollama_host)
+    if t["ok"] and cfg.llm_enabled and cfg.llm_keep_loaded and llmhost.has_model(t["models"], cfg.ollama_model):
+        import threading
+
+        from ...extract.llm import warm_up
+        threading.Thread(target=warm_up, kwargs={"keep": True}, daemon=True).start()
+    return templates.TemplateResponse(request, "partials/ollama.html", _ollama_ctx(test=t))
+
+
+@router.post("/settings/ollama/test", name="settings_ollama_test")
+def ollama_test(request: Request, host: str = Form("")):
+    from ... import llmhost
+    return templates.TemplateResponse(request, "partials/ollama.html", _ollama_ctx(test=llmhost.test_host(host or get_settings().ollama_host)))
+
+
+@router.post("/settings/ollama/pull", name="settings_ollama_pull")
+def ollama_pull(request: Request, model: str = Form("")):
+    from ... import llmhost
+    cfg = get_settings()
+    llmhost.pull_async(model or cfg.ollama_model, cfg.ollama_host)
+    return templates.TemplateResponse(request, "partials/ollama.html", _ollama_ctx(test=llmhost.test_host(cfg.ollama_host, timeout=2.5)))
+
+
+@router.post("/settings/ollama/scan", name="settings_ollama_scan")
+def ollama_scan(request: Request):
+    from ... import llmhost
+    cfg = get_settings()
+    return templates.TemplateResponse(request, "partials/ollama.html",
+                                      _ollama_ctx(test=llmhost.test_host(cfg.ollama_host, timeout=2.5), scan=llmhost.scan_lan()))

@@ -161,6 +161,28 @@ shrinking would save less than 10 %. Set `pdf_image_dpi = 0` to leave PDFs untou
 `shrink_files = false` to turn it all off. `recipes shrink` (or Settings → Maintenance →
 "Shrink stored PDFs and pictures") applies the same to what is already in the library.
 
+## Running the model on another computer
+
+Extraction can use an Ollama on any machine on your network, say a PC with a good graphics
+card, while the library itself runs on a small always-on box. In Settings → "Recipe
+extraction (Ollama)", enter the other machine's address (`http://<name-or-ip>:11434`),
+click Test, then "Pull model there" if it doesn't have the model yet, then Save. Or
+`recipes config set ollama_host http://<name-or-ip>:11434`.
+
+Ollama listens only on its own machine by default. On the machine that runs it:
+
+- **Linux (systemd install):** `sudo systemctl edit ollama`, add
+  `[Service]` / `Environment="OLLAMA_HOST=0.0.0.0"`, then `sudo systemctl restart ollama`.
+  Snap install: `sudo snap set ollama host=0.0.0.0`.
+- **macOS (Ollama app):** `launchctl setenv OLLAMA_HOST "0.0.0.0"`, then quit and reopen
+  Ollama from the menu bar.
+- **Windows (Ollama app):** Settings → System → About → Advanced system settings →
+  Environment Variables → add `OLLAMA_HOST` = `0.0.0.0`, then quit Ollama from the tray and
+  start it again.
+
+Open TCP port 11434 on that machine's firewall for your private network. "Find Ollama on
+my network" in Settings scans the local network for machines that answer on that port.
+
 ## Memory and the model
 
 The server loads the model into memory at startup and keeps it there

@@ -30,6 +30,11 @@
     <h2>Updates</h2>
     {% include "partials/update_status.html" %}
   </section>
+  <section class="panel wide" id="ollama-panel">
+    <h2>Recipe extraction (Ollama)</h2>
+    <p class="muted">The model that turns page text into ingredients and steps. It can run on this machine or on any other computer on your network that has Ollama, for example a PC with a good graphics card. Changes apply immediately, no restart.</p>
+    <div hx-get="{{ request.url_for('ollama_partial') }}" hx-trigger="load" hx-swap="outerHTML"><span class="spin"></span> checking Ollama…</div>
+  </section>
   <section class="panel wide" id="backups">
     <h2>Backups</h2>
     <p class="muted">A backup is one zip with the database and every PDF and picture. One is made automatically every {{ cfg.auto_backup_days|int if cfg.auto_backup_days == cfg.auto_backup_days|int else cfg.auto_backup_days }} day(s), keeping the newest {{ cfg.backup_keep }}, in <code>{{ cfg.library_dir }}/backups</code>. Copy them somewhere else too.</p>

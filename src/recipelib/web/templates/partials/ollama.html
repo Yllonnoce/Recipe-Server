@@ -1,0 +1,32 @@
+<div id="ollama" {% if pull.running %}hx-get="{{ request.url_for('ollama_partial') }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <form hx-post="{{ request.url_for('settings_ollama_save') }}" hx-target="#ollama" hx-swap="outerHTML" class="stack">
+    <div class="row">
+      <label>Ollama address <input name="host" value="{{ cfg.ollama_host }}" placeholder="http://127.0.0.1:11434 or http://gpu-box:11434" list="ollamaHosts"></label>
+      <label>Model <input name="model" value="{{ cfg.ollama_model }}" list="ollamaModels"></label>
+    </div>
+    <datalist id="ollamaModels">{% if test and test.models %}{% for m in test.models %}<option value="{{ m }}">{% endfor %}{% endif %}<option value="qwen3:8b"><option value="qwen3:4b"><option value="llama3.1:8b"></datalist>
+    <datalist id="ollamaHosts">{% if scan %}{% for h in scan %}<option value="{{ h.host }}">{{ h.name or h.ip }}{% endfor %}{% endif %}</datalist>
+    <div class="actions">
+      <button class="btn primary" type="submit">Save &amp; use</button>
+      <button class="btn" type="button" hx-post="{{ request.url_for('settings_ollama_test') }}" hx-include="closest form" hx-target="#ollama" hx-swap="outerHTML">Test connection</button>
+      <button class="btn" type="button" hx-post="{{ request.url_for('settings_ollama_pull') }}" hx-include="closest form" hx-target="#ollama" hx-swap="outerHTML" {{ 'disabled' if pull.running or not (test and test.ok) }} title="Download the model on that machine">Pull model there</button>
+      <button class="btn" type="button" hx-post="{{ request.url_for('settings_ollama_scan') }}" hx-target="#ollama" hx-swap="outerHTML" hx-indicator="#scanSpin" title="Look for machines on this network running Ollama">Find Ollama on my network</button>
+      <span id="scanSpin" class="htmx-indicator"><span class="spin"></span> scanning…</span>
+    </div>
+  </form>
+  <table class="kv">
+    <tr><th>Status</th><td>
+      {% if test is none %}not tested
+      {% elif test.ok %}✅ Ollama {{ test.version }} at <code>{{ test.host }}</code>
+        {% if has_model %}· model <strong>{{ cfg.ollama_model }}</strong> ready{% else %}· <strong>model {{ cfg.ollama_model }} is not on that machine</strong> (Pull model there){% endif %}
+      {% else %}⚠️ cannot reach <code>{{ test.host }}</code>: {{ test.error }}{% endif %}
+    </td></tr>
+    {% if test and test.ok and test.models %}<tr><th>Models there</th><td>{{ test.models|join(', ') }}</td></tr>{% endif %}
+    {% if pull.running or pull.done is not none %}
+    <tr><th>Pull</th><td>{% if pull.running %}<span class="spin"></span> {{ pull.model }}: {{ pull.status }} {{ pull.percent }}%<div class="bar"><div class="fill" style="width:{{ pull.percent }}%;animation:none;margin:0"></div></div>{% elif pull.done %}✅ {{ pull.model }} pulled{% else %}⚠️ pull failed: {{ pull.error }}{% endif %}</td></tr>
+    {% endif %}
+    {% if scan is not none %}
+    <tr><th>Found</th><td>{% if scan %}{% for h in scan %}<div><button class="btn small" type="button" onclick="document.querySelector('#ollama input[name=host]').value='{{ h.host }}'">use</button> <code>{{ h.host }}</code> {{ h.name }} · Ollama {{ h.version or '?' }} · {{ h.models|join(', ') if h.models else 'no models yet' }}</div>{% endfor %}{% else %}nothing answered on port 11434 on this network (is Ollama listening on 0.0.0.0 there? see the docs){% endif %}</td></tr>
+    {% endif %}
+  </table>
+</div>
