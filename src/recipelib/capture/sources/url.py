@@ -56,6 +56,7 @@ def fetch_to_pdf(url: str, timeout_ms: int = 45000) -> FetchResult:
             _dismiss_consent(page)
             _scroll(page)
             title = (page.title() or "").strip() or None
+            hero = _screenshot_largest_image(page)
             html = page.content()
             try:
                 body_text = page.inner_text("body")
@@ -75,7 +76,7 @@ def fetch_to_pdf(url: str, timeout_ms: int = 45000) -> FetchResult:
         finally:
             browser.close()
     draft, image_url = scrape(html, url)
-    cover = _download_cover(image_url) if image_url else None
+    cover = (_download_cover(image_url) if image_url else None) or hero
     if draft and draft.get("title"):
         title = draft["title"]
     return FetchResult(pdf_path=out, title=_clean_title(title), body_text=body_text, html=html, draft=draft, cover_png=cover)
@@ -116,6 +117,41 @@ def _scroll(page) -> None:
         page.wait_for_timeout(300)
     except Exception:  # noqa: BLE001
         pass
+
+
+def _screenshot_largest_image(page) -> bytes | None:
+    """A screenshot of the page's biggest visible photo, used when the site's
+    own image URL is missing or refuses to download (hotlink protection)."""
+    try:
+        info = page.evaluate("""() => {
+          let best = null, area = 0;
+          for (const im of document.images) {
+            const r = im.getBoundingClientRect();
+            if (r.width < 240 || r.height < 160) continue;
+            const a = r.width * r.height;
+            if (a > area && r.width / r.height < 3 && r.height / r.width < 2) { area = a; best = im; }
+          }
+          if (!best) return null;
+          best.scrollIntoView({block: 'center'});
+          return true;
+        }""")
+        if not info:
+            return None
+        page.wait_for_timeout(300)
+        handle = page.evaluate_handle("""() => {
+          let best = null, area = 0;
+          for (const im of document.images) { const r = im.getBoundingClientRect(); const a = r.width * r.height;
+            if (r.width >= 240 && r.height >= 160 && a > area && r.width / r.height < 3 && r.height / r.width < 2) { area = a; best = im; } }
+          return best;
+        }""")
+        el = handle.as_element()
+        if el is None:
+            return None
+        png = el.screenshot(type="png")
+        page.evaluate("window.scrollTo(0, 0)")
+        return png if len(png) > 2000 else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _clean_title(t: str | None) -> str | None:

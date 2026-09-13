@@ -36,6 +36,7 @@ def test_upload_to_library(client, library, tmp_path):
         assert rec.page_count == 2
         assert rec.status == "needs_review"      # no LLM in tests
         assert rec.thumb_asset_id is not None
+        assert rec.cover_asset_id is not None          # a text-only PDF still gets a picture (page crop)
         assert (library.assets_dir / rec.pdf_asset.rel_path).is_file()
 
     detail = client.get(f"/recipes/{rid}").text

@@ -250,11 +250,17 @@ def stage_ocr(ctx: Ctx):
 
 
 def stage_thumbnail(ctx: Ctx):
+    """Every recipe gets a picture: the site's photo, else the best photo found
+    in the PDF's first pages, else a crop of the top of page 1."""
     cfg = get_settings()
     thumb = pdfops.render_page_png(ctx.pdf_path, 0, pdfops.THUMB_WIDTH)
     cover = ctx.cover_png
     if cover is None:
-        cover = pdfops.largest_image_on_page(ctx.pdf_path, 0)
+        cands = pdfops.candidate_images(ctx.pdf_path, max_pages=2)
+        if cands:
+            cover = pdfops.image_png(ctx.pdf_path, cands[0]["xref"])
+    if cover is None:
+        cover = pdfops.render_page_top_png(ctx.pdf_path, 0, pdfops.COVER_WIDTH)
     if cover is not None:
         cover, _w, _h = pdfops.resize_png(cover, pdfops.COVER_WIDTH)
     with session_scope() as s:
