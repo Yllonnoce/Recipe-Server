@@ -96,22 +96,36 @@ class Advertiser:
     def _run(self) -> None:
         import logging as _logging
         _logging.getLogger("zeroconf").setLevel(_logging.CRITICAL)   # its sendto tracebacks while Wi-Fi comes up are noise
+        # at boot the daemon can start before Wi-Fi is up; wait for an address
+        waited = 0
+        while not local_ipv4s() and waited < 120 and not self._stop.is_set():
+            self._stop.wait(5)
+            waited += 5
         try:
             from zeroconf import Zeroconf
             self._zc = Zeroconf()
             self._register()
         except Exception as e:  # noqa: BLE001
             self.error = f"{type(e).__name__}: {e}"
-            log.exception("mDNS advertising failed; the printer can still be added by address")
+            log.warning("mDNS advertising failed (%s); will retry. The printer can still be added by address", self.error)
         finally:
             self.ready.set()
-        while not self._stop.wait(60):
+        # retry soon after a failed start, then hourly-ish checks for address changes
+        delay = 15 if self.error else 60
+        while not self._stop.wait(delay):
             try:
-                if self._zc is not None and local_ipv4s() != self._ips:
-                    log.info("mDNS: addresses changed, re-registering")
+                if self._zc is None:
+                    from zeroconf import Zeroconf
+                    self._zc = Zeroconf()
+                if local_ipv4s() != self._ips:
+                    log.info("mDNS: addresses changed or not yet advertised, registering")
                     self._register()
+                    self.error = None
+                delay = 60
             except Exception as e:  # noqa: BLE001
-                log.warning("mDNS re-register failed: %s: %s", type(e).__name__, e)
+                self.error = f"{type(e).__name__}: {e}"
+                log.warning("mDNS register failed: %s (retrying)", self.error)
+                delay = 30
         if self._zc is not None:
             try:
                 self._zc.unregister_all_services()
@@ -139,7 +153,15 @@ class Advertiser:
         self._infos = []
         base = ServiceInfo("_ipp._tcp.local.", svc_name, addresses=addresses, port=self.port,
                            properties=props, server=server)
-        self._zc.register_service(base, cooperating_responders=True)
+        try:
+            self._zc.register_service(base, cooperating_responders=True)
+        except Exception as e:  # noqa: BLE001
+            # a previous attempt may have added the name to the registry before the
+            # network send failed; updating instead of registering recovers that
+            if type(e).__name__ in ("ServiceNameAlreadyRegistered", "NonUniqueNameException"):
+                self._zc.update_service(base)
+            else:
+                raise
         self._infos.append(base)
         # Subtype pointers (_universal._sub._ipp._tcp is what AirPrint browses
         # for). zeroconf keys its registry by instance name, so a second

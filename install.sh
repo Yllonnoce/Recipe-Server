@@ -112,10 +112,21 @@ if [ "$SKIP_INSTALL" = 0 ] && ! have ollama; then
   else
     if have brew; then
       read -r -p "Install it now with Homebrew? [Y/n] " ans
-      if [ "${ans:-Y}" != "n" ] && [ "${ans:-Y}" != "N" ]; then brew install ollama; brew services start ollama || true; fi
+      if [ "${ans:-Y}" != "n" ] && [ "${ans:-Y}" != "N" ]; then
+        brew install ollama
+        if [ "$SYSTEM" = 1 ]; then sudo brew services start ollama || true; else brew services start ollama || true; fi
+      fi
     else
       warn "Download it from https://ollama.com/download and run it, then: ollama pull qwen3:8b"
     fi
+  fi
+fi
+if [ "$OS" = "Darwin" ] && [ "$SYSTEM" = 1 ] && have brew && brew list ollama >/dev/null 2>&1; then
+  # with a boot-time server, Ollama must also run at boot (a login item won't)
+  if ! sudo launchctl print system/homebrew.mxcl.ollama >/dev/null 2>&1; then
+    say "Making Ollama start at boot too (sudo brew services start ollama)"
+    brew services stop ollama >/dev/null 2>&1 || true
+    sudo brew services start ollama || warn "run: sudo brew services start ollama"
   fi
 fi
 if [ "$MODEL" = 1 ] && have ollama; then
