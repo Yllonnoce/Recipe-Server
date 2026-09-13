@@ -155,9 +155,9 @@ def page_image(recipe_id: int, page: int, s: Session = Depends(get_db)):
 
 
 @router.post("/{recipe_id}/cover", name="recipe_cover")
-async def set_cover(recipe_id: int, request: Request, choice: str = Form("keep"),
+async def set_cover(recipe_id: int, request: Request, choice: str = Form("keep"), image_url: str = Form(""),
                     file: UploadFile | None = File(None), s: Session = Depends(get_db)):
-    """choice: xref:<n> (image from the PDF), page:<n> (rendered page), upload, none, keep."""
+    """choice: xref:<n> (image from the PDF), page:<n> (rendered page), upload, url, none, keep."""
     from ...capture import pdf as pdfops
     r = _get(s, recipe_id)
     pdf = _pdf_path(r)
@@ -177,6 +177,16 @@ async def set_cover(recipe_id: int, request: Request, choice: str = Form("keep")
         buf = io.BytesIO()
         im.save(buf, format="PNG")
         png = buf.getvalue()
+    elif choice == "url":
+        from starlette.concurrency import run_in_threadpool
+
+        from ...capture.sources.url import _download_cover
+        u = image_url.strip()
+        if not u.startswith(("http://", "https://")):
+            raise HTTPException(400, "paste a full image address starting with http")
+        png = await run_in_threadpool(_download_cover, u)     # never block the event loop on a download
+        if png is None:
+            raise HTTPException(400, "could not download an image from that address")
     elif choice.startswith("xref:") and pdf:
         png = pdfops.image_png(pdf, int(choice[5:]))
         if png is None:

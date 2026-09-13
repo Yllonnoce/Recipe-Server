@@ -112,6 +112,7 @@ def test_upload_to_library(client, library, tmp_path):
     with session_scope() as s:
         rec = s.get(Recipe, rid)
         assert rec.cover_asset_id is not None and rec.cover_asset_id != cover_a
+    assert client.post(f"/recipes/{rid}/cover", data={"choice": "url", "image_url": "not a url"}, follow_redirects=False).status_code == 400
     client.post(f"/recipes/{rid}/cover", data={"choice": "none"}, follow_redirects=False)
     with session_scope() as s:
         assert s.get(Recipe, rid).cover_asset_id is None

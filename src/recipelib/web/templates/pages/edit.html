@@ -1,5 +1,68 @@
 {% extends "base.html" %}
 {% block title %}Edit {{ r.title }} — Recipe Library{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const form = document.getElementById('cover'), fileIn = document.getElementById('coverFile'), urlIn = document.getElementById('coverUrl');
+  const tile = document.getElementById('uploadTile'), preview = document.getElementById('uploadPreview'), urlPreview = document.getElementById('urlPreview');
+  const pick = (v) => { const r = form.querySelector('input[type=radio][value="' + v + '"]'); if (r) r.checked = true; };
+  const flash = (m) => { const h = document.getElementById('pasteHint'); h.textContent = m; setTimeout(() => h.textContent = 'Tip: copy a picture anywhere, then press Ctrl+V (⌘V) on this page.', 3000); };
+  function useFile(file) {
+    if (!file || !file.type.startsWith('image/')) { flash('That is not an image.'); return; }
+    const dt = new DataTransfer(); dt.items.add(new File([file], file.name || 'pasted.png', { type: file.type }));
+    fileIn.files = dt.files;
+    preview.innerHTML = ''; const img = document.createElement('img'); img.src = URL.createObjectURL(file); preview.appendChild(img); preview.classList.remove('none');
+    pick('upload'); flash('Image ready — click "Use this photo".');
+    tile.scrollIntoView({ block: 'nearest' });
+  }
+  function useUrl(u) {
+    urlIn.value = u; pick('url');
+    urlPreview.innerHTML = ''; const img = document.createElement('img'); img.src = u; img.onerror = () => { urlPreview.textContent = 'from a web address'; };
+    urlPreview.appendChild(img); urlPreview.classList.remove('none'); flash('Address ready — click "Use this photo".');
+  }
+  fileIn.addEventListener('change', () => { if (fileIn.files[0]) useFile(fileIn.files[0]); });
+  urlIn.addEventListener('input', () => { if (/^https?:\/\//.test(urlIn.value)) useUrl(urlIn.value.trim()); });
+  // Ctrl+V / Cmd+V anywhere on the page (works on plain http)
+  document.addEventListener('paste', (e) => {
+    const t = e.target && e.target.tagName;
+    const items = e.clipboardData && e.clipboardData.items ? Array.from(e.clipboardData.items) : [];
+    const im = items.find((i) => i.type.startsWith('image/'));
+    if (im) { e.preventDefault(); useFile(im.getAsFile()); return; }
+    if (t === 'INPUT' || t === 'TEXTAREA') return;                 // let text pastes into fields alone
+    const txt = e.clipboardData ? e.clipboardData.getData('text/plain').trim() : '';
+    if (/^https?:\/\/\S+\.(png|jpe?g|webp|gif|bmp)(\?\S*)?$/i.test(txt) || /^https?:\/\/\S+$/.test(txt) && /image|photo|img|cdn/i.test(txt)) { e.preventDefault(); useUrl(txt); }
+  });
+  // Paste button: the async clipboard API where the browser allows it (https or localhost), else explain
+  document.getElementById('pasteBtn').addEventListener('click', async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.read) {
+        const items = await navigator.clipboard.read();
+        for (const it of items) {
+          const type = it.types.find((x) => x.startsWith('image/'));
+          if (type) { useFile(new File([await it.getType(type)], 'pasted.png', { type })); return; }
+        }
+      }
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const txt = (await navigator.clipboard.readText()).trim();
+        if (/^https?:\/\//.test(txt)) { useUrl(txt); return; }
+      }
+      flash('Nothing usable on the clipboard. Press Ctrl+V (⌘V) instead.');
+    } catch (err) {
+      flash('This browser only allows pasting with Ctrl+V (⌘V) here.');
+    }
+  });
+  // drag a picture onto the upload tile
+  ['dragenter', 'dragover'].forEach((ev) => tile.addEventListener(ev, (e) => { e.preventDefault(); tile.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((ev) => tile.addEventListener(ev, (e) => { e.preventDefault(); tile.classList.remove('over'); }));
+  tile.addEventListener('drop', (e) => {
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) { useFile(f); return; }
+    const u = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+    if (u && /^https?:\/\//.test(u)) useUrl(u.trim());
+  });
+})();
+</script>
+{% endblock %}
 {% block content %}
 <div class="edit-layout">
   <div class="edit-pdf">
@@ -70,13 +133,22 @@
         <small>page {{ pno + 1 }}</small>
       </label>
       {% endfor %}
-      <label class="cover-opt upload">
+      <label class="cover-opt upload" id="uploadTile">
         <input type="radio" name="choice" value="upload">
-        <span class="thumb none">upload…</span>
-        <input type="file" name="file" accept="image/*" onchange="this.closest('label').querySelector('input[type=radio]').checked = true">
+        <span class="thumb none" id="uploadPreview">upload, drop<br>or paste…</span>
+        <input type="file" name="file" accept="image/*" id="coverFile">
+      </label>
+      <label class="cover-opt">
+        <input type="radio" name="choice" value="url">
+        <span class="thumb none" id="urlPreview">from a web address</span>
+        <input type="url" name="image_url" id="coverUrl" placeholder="https://…/photo.jpg">
       </label>
     </div>
-    <div class="actions"><button class="btn" type="submit">Use this photo</button></div>
+    <div class="actions">
+      <button class="btn" type="submit">Use this photo</button>
+      <button class="btn" type="button" id="pasteBtn" title="Paste an image or an image address from the clipboard">📋 Paste</button>
+      <span class="muted" id="pasteHint">Tip: copy a picture anywhere, then press Ctrl+V (⌘V) on this page.</span>
+    </div>
   </form>
 </div>
 {% endblock %}
