@@ -33,6 +33,10 @@ class JobCanceled(Exception):
     pass
 
 
+class InputGone(Exception):
+    """The staged upload/print file no longer exists (restart or cleanup ate it)."""
+
+
 @dataclass
 class Ctx:
     job_id: int
@@ -64,6 +68,8 @@ def run_job(job_id: int, queue) -> None:
                   url=j.input_url, title_hint=j.title_hint, force=bool(j.force),
                   recipe_id=j.recipe_id, asset_id=j.asset_id, queue=queue)
         done_stages = {e["stage"] for e in j.log_entries if e.get("msg") == "ok"}
+    if ctx.pdf_path is not None and not ctx.pdf_path.exists() and ctx.recipe_id is None:
+        raise InputGone(f"the {ctx.source} file is no longer on disk ({ctx.pdf_path.name}); please add it again")
     for stage in STAGES:
         if stage in done_stages and stage not in ("llm", "normalize", "index"):
             continue

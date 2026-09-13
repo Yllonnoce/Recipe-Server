@@ -114,7 +114,7 @@ class JobQueue:
             return j.id
 
     def _run(self) -> None:
-        from .pipeline import LLMUnavailable, run_job
+        from .pipeline import InputGone, LLMUnavailable, run_job
         while not self._stop.is_set():
             jid = None
             try:
@@ -129,6 +129,9 @@ class JobQueue:
                 run_job(jid, self)
             except LLMUnavailable as e:
                 self._defer(jid, str(e))
+            except InputGone as e:
+                log.warning("job %s: %s", jid, e)
+                self._fail(jid, str(e))
             except Exception as e:  # noqa: BLE001
                 log.error("job %s failed: %s\n%s", jid, e, traceback.format_exc())
                 self._fail(jid, f"{type(e).__name__}: {e}")

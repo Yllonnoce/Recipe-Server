@@ -176,6 +176,14 @@ def test_startup_seeds_and_backfills_categories(library, tmp_path):
         assert "Seafood" in names and "Dinner" in names
 
 
+def test_missing_upload_fails_cleanly(client, library):
+    from recipelib.capture.queue import get_queue
+    get_queue().enqueue("upload", pdf_path=str(library.library_dir / "tmp" / "gone.pdf"), title_hint="Gone")
+    wait_for(lambda: "failed" in client.get("/partials/jobs").text)
+    html = client.get("/partials/jobs").text
+    assert "no longer on disk" in html and "Retry" not in html
+
+
 def test_pwa_files(client):
     assert client.get("/sw.js").headers["content-type"].startswith("application/javascript")
     m = client.get("/static/manifest.webmanifest")

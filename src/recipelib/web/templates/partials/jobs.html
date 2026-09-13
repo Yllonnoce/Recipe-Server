@@ -11,7 +11,7 @@
     <td class="state"><span class="badge {{ j.state }}">{{ j.state|replace('_',' ') }}</span>{% if j.state == 'running' and j.stage %} <span class="muted">{{ j.stage }}</span>{% endif %}</td>
     <td class="err">{% if j.last_error %}<span title="{{ j.last_error }}">{{ j.last_error[:80] }}</span>{% endif %}</td>
     <td class="act">
-      {% if j.state in ('failed','waiting_llm','canceled') %}<button class="btn small" hx-post="{{ request.url_for('job_retry', job_id=j.id) }}" hx-target="#jobs">Retry</button>{% endif %}
+      {% if j.state in ('failed','waiting_llm','canceled') and not (j.last_error and 'no longer on disk' in j.last_error) %}<button class="btn small" hx-post="{{ request.url_for('job_retry', job_id=j.id) }}" hx-target="#jobs">Retry</button>{% endif %}
       {% if j.state in ('queued','waiting_llm') %}<button class="btn small" hx-post="{{ request.url_for('job_cancel', job_id=j.id) }}" hx-target="#jobs">Cancel</button>{% endif %}
     </td>
   </tr>
