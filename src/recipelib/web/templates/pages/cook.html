@@ -11,6 +11,8 @@
 <meta name="apple-mobile-web-app-title" content="Recipes">
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
 <title>Cook: {{ r.title }}</title>
+<link rel="stylesheet" href="{{ request.url_for('static', path='themes.css') }}?v={{ static_v }}">
+<script src="{{ request.url_for('static', path='theme.js') }}?v={{ static_v }}"></script>
 <link rel="stylesheet" href="{{ request.url_for('static', path='app.css') }}?v={{ static_v }}">
 <link rel="stylesheet" href="{{ request.url_for('static', path='cook.css') }}?v={{ static_v }}">
 </head>

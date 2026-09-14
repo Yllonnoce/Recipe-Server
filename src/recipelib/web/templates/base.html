@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Recipe Library{% endblock %}</title>
+<!-- themes.css first so the tokens exist for everything that follows; theme.js applies the saved theme before first paint (no flash) -->
+<link rel="stylesheet" href="{{ request.url_for('static', path='themes.css') }}?v={{ static_v }}">
+<script src="{{ request.url_for('static', path='theme.js') }}?v={{ static_v }}"></script>
 <link rel="stylesheet" href="{{ request.url_for('static', path='app.css') }}?v={{ static_v }}">
 <link rel="manifest" href="/static/manifest.webmanifest">
 <meta name="theme-color" content="#c8542a">
@@ -28,6 +31,14 @@
     <a href="{{ request.url_for('settings') }}">Settings{% if update_state.behind %} <span class="upd" title="A newer version is available">update</span>{% endif %}</a>
     <button class="fs" type="button" id="fsBtn" title="Full screen for this page. For full screen that stays on, add the app to your home screen.">&#x26F6;</button>
   </nav>
+  <!-- Theme picker (as in ScenePlay): after the nav so it sits at the far right -->
+  <div class="sp-theme-wrap">
+    <button id="sp-theme-btn" type="button" onclick="spTogglePicker()" title="Color theme">&#9670;</button>
+    <div id="sp-theme-panel">
+      <div class="sp-panel-title">Color Theme</div>
+      <div id="sp-swatches"></div>
+    </div>
+  </div>
 </header>
 {% if update_state.behind and not update_state.updating %}
 <div class="update-banner" id="updateBanner">
