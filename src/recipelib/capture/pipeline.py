@@ -393,13 +393,17 @@ def stage_normalize(ctx: Ctx):
             unit = it.get("unit") or parsed.unit
             from ..extract.normalize import canonical_unit, normalize_name
             unit = canonical_unit(unit) or parsed.unit
+            q_max = _num(it.get("quantity_max")) or parsed.quantity_max
+            # "1 (14.5 ounce) can": the model answers 1 / can, the line's package size is the amount
+            if parsed.sized:
+                q, q_max, unit = parsed.quantity, parsed.quantity_max, parsed.unit
             name = (it.get("name") or parsed.name or raw).strip()
             prep = it.get("preparation") or parsed.preparation
             if prep and prep.lower() in name.lower():
                 name = re.sub(r",?\s*" + re.escape(prep) + r"\s*$", "", name, flags=re.I).strip(" ,") or name
             ing_rows.append({
                 "group_name": it.get("group") or None, "raw_text": raw, "quantity": q,
-                "quantity_max": _num(it.get("quantity_max")) or parsed.quantity_max,
+                "quantity_max": q_max,
                 "unit": unit, "unit_raw": parsed.unit_raw, "name": name,
                 "name_norm": normalize_name(name), "preparation": prep,
                 "optional": 1 if it.get("optional") or parsed.optional else 0,

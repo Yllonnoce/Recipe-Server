@@ -63,9 +63,13 @@ _QTY_RE = re.compile(
     rf"^\s*(?:about|approx\.?|approximately|roughly)?\s*"
     rf"(?P<q1>{_NUM})\s*(?P<vf>[½⅓⅔¼¾⅛⅜⅝⅞])?"
     rf"(?:\s*(?:-|–|—|to)\s*(?P<q2>{_NUM}))?\s*"
+    rf"(?:\(\s*(?P<sz>{_NUM})\s*-?\s*(?P<szunit>{_UNIT_RE})\b\.?\s*\)\s*)?"
     rf"(?:(?P<unit>{_UNIT_RE})\b\.?)?\s*(?:of\s+)?(?P<rest>.*)$",
     re.IGNORECASE,
 )
+# package words that are not units: "1 (8 oz) jar salsa" -> "salsa"
+_CONTAINER = re.compile(r"^(?:tins?|jars?|bottles?|box(?:es)?|bags?|containers?|cartons?|tubs?|tubes?|envelopes?|"
+                        r"pouch(?:es)?)\b\.?\s*(?:of\s+)?", re.I)
 _PAREN = re.compile(r"\s*\([^)]*\)")
 _STRIP_WORDS = {
     "fresh", "freshly", "large", "small", "medium", "chopped", "diced", "minced", "sliced",
@@ -157,6 +161,7 @@ class ParsedIngredient:
     name: str = ""
     preparation: str | None = None
     optional: bool = False
+    sized: bool = False          # amount came from a package size: "1 (14.5 ounce) can"
 
     @property
     def name_norm(self) -> str:
@@ -182,6 +187,20 @@ def parse_line(line: str) -> ParsedIngredient:
             p.unit_raw = m.group("unit")
             p.unit = canonical_unit(m.group("unit"))
         rest = m.group("rest") or ""
+        # "2 (15 ounce) cans beans" is 30 oz of beans: a bare package count means
+        # nothing once the container word is gone, the size inside the brackets does.
+        # Only for packages; "4 (200 g) eggs" is still 4 eggs.
+        size = parse_number(m.group("sz")) if m.group("sz") else None
+        size_unit = canonical_unit(m.group("szunit")) if size else None
+        packaged = p.unit in ("can", "package") or (p.unit is None and _CONTAINER.match(rest))
+        if size and q is not None and unit_family(size_unit) != "count" and packaged:
+            p.quantity = round(q * size, 3)
+            if p.quantity_max is not None:
+                p.quantity_max = round(p.quantity_max * size, 3)
+            p.unit = size_unit
+            p.unit_raw = "fl oz" if size_unit == "floz" else size_unit
+            p.sized = True
+            rest = _CONTAINER.sub("", rest)
     # "flour, sifted" -> name / preparation
     name, _, prep = rest.partition(",")
     name = _PAREN.sub("", name).strip(" .;:")

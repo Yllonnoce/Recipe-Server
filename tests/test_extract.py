@@ -56,3 +56,28 @@ def test_llm_sections_are_flattened_to_groups(library, monkeypatch):
     reply["step_sections"] = [{"heading": None, "steps": [{"text": "Simmer."}]}]
     d = llm.extract_recipe("Simple stock\n2 lobster shells\n8 cups water\nSimmer the shells in the water for an hour.")
     assert all(i["group"] is None for i in d["ingredients"]) and all(s["group"] is None for s in d["steps"])
+
+
+def test_package_size_beats_the_models_count(client):
+    """The model reads '1 (14.5 ounce) can beef broth' as 1 can; the stored
+    amount must be the 14.5 oz in the line."""
+    from recipelib.capture.pipeline import Ctx, stage_normalize
+    from recipelib.db.engine import session_scope
+    from recipelib.db.models import Recipe
+    with session_scope() as s:
+        r = Recipe(title="Chili", status="processing")
+        s.add(r)
+        s.flush()
+        rid = r.id
+    draft = {"is_recipe": True, "title": "Chili", "confidence": 0.9, "method": "llm",
+             "ingredients": [
+                 {"raw": "1 (14.5 ounce) can beef broth", "quantity": 1, "unit": "can", "name": "beef broth"},
+                 {"raw": "2 (7 ounce) cans salsa", "quantity": 2, "unit": None, "name": "salsa"},
+                 {"raw": "1 cup sour cream", "quantity": 1, "unit": "cup", "name": "sour cream"}],
+             "steps": [{"text": "Simmer everything."}]}
+    ctx = Ctx(job_id=0, source="upload", pdf_path=None, url=None, title_hint=None, force=False,
+              recipe_id=rid, draft=draft)
+    stage_normalize(ctx)
+    with session_scope() as s:
+        got = [(i.quantity, i.unit, i.unit_raw, i.name) for i in s.get(Recipe, rid).ingredients]
+    assert got == [(14.5, "oz", "oz", "beef broth"), (14.0, "oz", "oz", "salsa"), (1.0, "cup", "cup", "sour cream")]

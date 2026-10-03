@@ -12,7 +12,14 @@ from recipelib.extract.normalize import (detect_minutes, detect_times, format_qu
     ("2-3 cloves garlic, minced", 2.0, "clove", "garlic"),
     ("3 large eggs", 3.0, "large", "eggs"),
     ("Salt to taste", None, None, "Salt to taste"),
-    ("1 (14 oz) can tomatoes", 1.0, None, "can tomatoes"),
+    ("1 (14 oz) can tomatoes", 14.0, "oz", "tomatoes"),
+    ("1 (14.5 ounce) can beef broth", 14.5, "oz", "beef broth"),
+    ("2 (15-ounce) cans black beans, drained", 30.0, "oz", "black beans"),
+    ("1 (1 ounce) package taco seasoning mix", 1.0, "oz", "taco seasoning mix"),
+    ("1 (8 oz.) jar salsa", 8.0, "oz", "salsa"),
+    ("1 (3 pound) whole chicken", 1.0, None, "whole chicken"),
+    ("4 (200 g) eggs", 4.0, None, "eggs"),
+    ("4 (6 inch) corn tortillas", 4.0, None, "corn tortillas"),
     ("250 g butter, softened", 250.0, "g", "butter"),
     ("2 tablespoons olive oil", 2.0, "tbsp", "olive oil"),
     ("1/4 cup fresh parsley (chopped)", 0.25, "cup", "fresh parsley"),
@@ -28,6 +35,15 @@ def test_range_and_prep():
     p = parse_line("2 to 3 lbs chicken thighs, trimmed")
     assert p.quantity == 2 and p.quantity_max == 3 and p.unit == "lb"
     assert p.preparation == "trimmed"
+
+
+def test_package_size_is_the_amount():
+    """'1 (14.5 ounce) can beef broth' is 14.5 oz of broth, not '1 beef broth'."""
+    p = parse_line("1 (14.5 ounce) can beef broth")
+    assert (p.quantity, p.unit, p.unit_raw, p.name, p.sized) == (14.5, "oz", "oz", "beef broth", True)
+    p = parse_line("1-2 (15 ounce) cans chickpeas")
+    assert (p.quantity, p.quantity_max, p.unit) == (15, 30, "oz")
+    assert not parse_line("2 cups flour").sized
 
 
 def test_optional_flag():
