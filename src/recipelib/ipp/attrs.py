@@ -142,7 +142,7 @@ def printer_attributes(info: PrinterInfo, queued_jobs: int, requested: list[str]
         Attr("media-ready", C.KEYWORD, list(ready)),
         Attr("job-password-supported", C.INTEGER, [0]),
         Attr("printer-input-tray", C.OCTET_STRING, [b"type=sheetFeedAutoRemovableTray;mediafeed=0;mediaxfeed=0;maxcapacity=250;level=250;status=0;name=main;"]),
-        Attr("printer-output-tray", C.OCTET_STRING, [b"type=unRemovableBin;maxcapacity=100;remaining=100;status=0;name=face-down;stackingorder=lastToFirst;pagedelivery=faceDown;"]),
+        Attr("printer-output-tray", C.OCTET_STRING, [b"type=unRemovableBin;maxcapacity=100;remaining=100;status=0;name=face-down;stackingorder=firstToLast;pagedelivery=faceDown;"]),
         Attr("marker-names", C.NAME, ["Cloud ink"]),
         Attr("marker-types", C.KEYWORD, ["ink-cartridge"]),
         Attr("marker-colors", C.NAME, ["#000000"]),

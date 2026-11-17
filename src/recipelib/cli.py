@@ -605,6 +605,35 @@ def service_logs(lines: int = 50):
             typer.echo(ln.rstrip())
 
 
+home_cli = typer.Typer(help="The home server from one menu: what is running, start and stop, logs, update, backup.",
+                       invoke_without_command=True)
+cli.add_typer(home_cli, name="home")
+
+
+@home_cli.callback()
+def home_menu(ctx: typer.Context):
+    """Open the menu (this is what the desktop icon runs)."""
+    if ctx.invoked_subcommand is None:
+        from . import home
+        home.menu()
+
+
+@home_cli.command("install")
+def home_install():
+    """Put the 'Recipe Library Server' icon on the desktop."""
+    from . import home
+    home.install(typer.echo)
+
+
+@home_cli.command("status")
+def home_status():
+    """Print the status table once and exit."""
+    from . import home
+    checks = home.gather_checks()
+    typer.echo(home.status_table(checks))
+    raise typer.Exit(code=1 if any(c.state == "down" for c in checks) else 0)
+
+
 @cli.command("printer-test")
 def printer_test(uri: str | None = typer.Option(None, help="ipp://host:port/ipp/print (default: this machine)"),
                  file: Path | None = typer.Option(None, help="PDF to send; default is a generated sample")):

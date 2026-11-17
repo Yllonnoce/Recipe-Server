@@ -144,8 +144,8 @@
       </label>
       {% for c in candidates %}
       <label class="cover-opt">
-        <input type="radio" name="choice" value="xref:{{ c.xref }}">
-        <span class="thumb"><img src="{{ request.url_for('recipe_pdf_image', recipe_id=r.id, xref=c.xref) }}" alt="" loading="lazy"></span>
+        <input type="radio" name="choice" value="{{ c.key }}">
+        <span class="thumb"><img src="{{ request.url_for('recipe_cover_candidate', recipe_id=r.id).include_query_params(key=c.key) }}" alt="" loading="lazy"></span>
         <small>p. {{ c.page + 1 }} · {{ c.width }}×{{ c.height }}</small>
       </label>
       {% endfor %}

@@ -148,6 +148,19 @@ def pdf_image(recipe_id: int, xref: int, s: Session = Depends(get_db)):
     return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
+@router.get("/{recipe_id}/cover-candidate", name="recipe_cover_candidate")
+def cover_candidate(recipe_id: int, key: str, s: Session = Depends(get_db)):
+    """A cover candidate from the recipe's PDF (embedded image or photo found on a printed page)."""
+    from ...capture import pdf as pdfops
+    r = _get(s, recipe_id)
+    pdf = _pdf_path(r)
+    png = pdfops.candidate_png(pdf, key, 480) if pdf else None
+    if png is None:
+        raise HTTPException(404)
+    png, _w, _h = pdfops.resize_png(png, 480)
+    return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
 @router.get("/{recipe_id}/page-image/{page}", name="recipe_page_image")
 def page_image(recipe_id: int, page: int, s: Session = Depends(get_db)):
     from ...capture import pdf as pdfops
@@ -162,7 +175,7 @@ def page_image(recipe_id: int, page: int, s: Session = Depends(get_db)):
 @router.post("/{recipe_id}/cover", name="recipe_cover")
 async def set_cover(recipe_id: int, request: Request, choice: str = Form("keep"), image_url: str = Form(""),
                     file: UploadFile | None = File(None), s: Session = Depends(get_db)):
-    """choice: xref:<n> (image from the PDF), page:<n> (rendered page), upload, url, none, keep."""
+    """choice: xref:<n> / clip:... (image from the PDF), page:<n> (rendered page), upload, url, none, keep."""
     r = _get(s, recipe_id)
     if choice == "keep":
         return RedirectResponse(request.url_for("recipe_edit", recipe_id=r.id), status_code=303)
@@ -200,8 +213,8 @@ async def _apply_cover(s: Session, r, choice: str, image_url: str, file) -> None
         png = await run_in_threadpool(_download_cover, u)     # never block the event loop on a download
         if png is None:
             raise HTTPException(400, "could not download an image from that address")
-    elif choice.startswith("xref:") and pdf:
-        png = pdfops.image_png(pdf, int(choice[5:]))
+    elif choice.startswith(("xref:", "clip:")) and pdf:
+        png = pdfops.candidate_png(pdf, choice)
         if png is None:
             raise HTTPException(404, "image not found in the PDF")
     elif choice.startswith("page:") and pdf:

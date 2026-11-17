@@ -43,6 +43,9 @@ def test_get_printer_attributes_filters(tmp_path):
     assert pg.get("printer-uuid").value == "urn:uuid:8b0a4d3e-1111-2222-3333-444444444444"
     assert pg.get("media-default").value == "na_letter_8.5x11in"
     assert "application/PCLm" not in pg.get("document-format-supported").values
+    # a tray that stacks last-to-first makes Apple devices send the pages back to front
+    tray = bytes(pg.get("printer-output-tray").value)
+    assert b"stackingorder=firstToLast;" in tray and b"pagedelivery=faceDown;" in tray
     # the response must survive a wire round trip (collections included)
     again, _ = C.decode(C.encode(r))
     assert again.group(C.PRINTER_GROUP).get("media-col-default").value.get("media-size").value.get("x-dimension").value == 21590

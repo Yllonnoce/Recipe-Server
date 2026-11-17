@@ -122,6 +122,12 @@ recipes service remove
 
 `./install.sh --service` and `install.bat /service` run `recipes service install` for you.
 
+For a menu instead of commands, `recipes home` shows what is running (server, printer,
+Ollama, the library) and starts, stops and restarts the service, follows the log, opens the
+browser, updates, backs up and runs the doctor. `recipes home install` puts a
+"Recipe Library Server" icon on the desktop that opens it; `recipes home status` prints the
+table once.
+
 On Linux and macOS `--service` is a per-user service: it starts when you log in. For a
 machine that is a server first (boots to the login window, or you manage it over SSH) use
 `./install.sh --system` or `recipes service install --system` instead: a boot-time service
