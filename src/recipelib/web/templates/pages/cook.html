@@ -15,6 +15,7 @@
 <script src="{{ request.url_for('static', path='theme.js') }}?v={{ static_v }}"></script>
 <link rel="stylesheet" href="{{ request.url_for('static', path='app.css') }}?v={{ static_v }}">
 <link rel="stylesheet" href="{{ request.url_for('static', path='cook.css') }}?v={{ static_v }}">
+<link rel="stylesheet" href="{{ request.url_for('static', path='timers.css') }}?v={{ static_v }}">
 </head>
 <body class="cook" data-font="1" data-webm="GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAALcEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHWTbuMU6uEElTDZ1OsggEcTbuMU6uEHFO7a1OsggLG7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsCrXsYMPQkBNgIxMYXZmNjEuMS4xMDBXQYxMYXZmNjEuMS4xMDBEiYhAp3AAAAAAABZUrmvBrgEAAAAAAAA414EBc8WIC6YygzvxkQCcgQAitZyDdW5kiIEAhoVWX1ZQOIOBASPjg4QO5rKA4ImwgRC6gRCagQISVMNn+nNzn2PAgGfImUWjh0VOQ09ERVJEh4xMYXZmNjEuMS4xMDBzc9VjwItjxYgLpjKDO/GRAGfIoEWjh0VOQ09ERVJEh5NMYXZjNjEuMy4xMDAgbGlidnB4Z8ihRaOIRFVSQVRJT05Eh5MwMDowMDowMy4wMDAwMDAwMDAAH0O2dUEl54EAo6OBAACAEAIAnQEqEAAQAABHCIWFiIWEiAICAAwNYAD+/6tQgKOVgQD6ALEBAAEQEAAYABhYL/QACAAAo5WBAfQAsQEAARAQABgAGFgv9AAIAACjlYEC7gCxAQABEBAAGAAYWC/0AAgAAKOVgQPoALEBAAEQEAAYABhYL/QACAAAo5WBBOIAsQEAARAQABgAGFgv9AAIAACjlYEF3ACxAQABEBAAGAAYWC/0AAgAAKOVgQbWALEBAAEQEBRgAGFgv9AAIAAAo5WBB9AAsQEAARAQABgAGFgv9AAIAACjlYEIygCxAQABEBAAGAAYWC/0AAgAAKOVgQnEALEBAAEQEAAYABhYL/QACAAAo5WBCr4AsQEAARAQABgAGFgv9AAIAAAcU7trkbuPs4EAt4r3gQHxggGb8IED">
 <header class="cookbar">
@@ -28,19 +29,28 @@
   <span class="units" id="units" title="Show amounts in"><button type="button" data-u="original">as written</button><button type="button" data-u="us">US</button><button type="button" data-u="metric">metric</button></span>
   <button id="fontMinus" title="Smaller text">A&minus;</button>
   <button id="fontPlus" title="Larger text">A+</button>
+  <button id="btnSpeak" type="button" aria-pressed="false" title="Read each step aloud as you tick the one before">🔊</button>
+  <button id="btnVoice" type="button" aria-expanded="false" aria-controls="voicePanel" title="Voice, pitch and pace" aria-label="Voice, pitch and pace"><span class="ico" aria-hidden="true">⚙</span><span class="txt"> Voice</span></button>
   <button id="btnReset" title="Uncheck everything">Reset</button>
   <button id="btnFull" title="Full screen (F)">&#x26F6;</button>
   <span id="awake" class="awake" title="Screen stays awake while this page is open">☀</span>
 </header>
+<div id="voicePanel" class="voice-panel" hidden>
+  <label>Voice <select id="voiceSel"><option>Loading…</option></select></label>
+  <label>Pitch <input id="voicePitch" type="range" min="-20" max="20" step="1"> <output id="pitchVal"></output></label>
+  <label>Pace <input id="voicePace" type="range" min="-30" max="30" step="1"> <output id="paceVal"></output></label>
+  <div class="row"><button id="voiceTest" type="button">▶ Try it</button><span id="voiceNote" class="muted"></span></div>
+</div>
 <nav class="tabs"><button class="on" data-tab="ing">Ingredients</button><button data-tab="steps">Steps</button></nav>
 <main class="cookmain">
-  <section id="ing" class="pane on"><h2>Ingredients</h2><div id="ingList"></div></section>
+  <section id="ing" class="pane on"><h2>Ingredients <button id="readIng" class="read" type="button" title="Read the ingredients aloud">🔊 Read</button></h2><div id="ingList"></div></section>
   <section id="steps" class="pane"><h2>Steps</h2><div id="stepList"></div></section>
 </main>
-<div id="timers"></div>
 <video id="keepawake" loop muted playsinline hidden></video>
 <script id="recipe-data" type="application/json">{{ data | tojson }}</script>
 <script src="{{ request.url_for('static', path='scale.js') }}?v={{ static_v }}"></script>
+<script src="{{ request.url_for('static', path='timers.js') }}?v={{ static_v }}"></script>
+<script src="{{ request.url_for('static', path='tts.js') }}?v={{ static_v }}"></script>
 <script src="{{ request.url_for('static', path='cook.js') }}?v={{ static_v }}"></script>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});</script>
 </body>

@@ -26,10 +26,6 @@ body.cook[data-font="2"] { --f: 1.2; } body.cook[data-font="3"] { --f: 1.45; } b
 .step.done .n { background: var(--ok); }
 .step .body { flex: 1; }
 .step .timer { display: inline-block; margin-top: 8px; font: inherit; font-size: .8em; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); background: none; cursor: pointer; }
-#timers { position: fixed; bottom: 16px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 6; }
-#timers .t { background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 12px; display: flex; gap: 12px; align-items: center; box-shadow: var(--shadow); font-variant-numeric: tabular-nums; }
-#timers .t.over { background: var(--bad); color: #fff; animation: blink 1s infinite; }
-#timers .t button { background: none; border: 1px solid currentColor; color: inherit; border-radius: 6px; padding: 2px 8px; cursor: pointer; font: inherit; font-size: .8em; }
 @keyframes blink { 50% { opacity: .6; } }
 @media (max-width: 800px) {
   .tabs { display: flex; position: sticky; top: 52px; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
@@ -43,3 +39,41 @@ body.cook[data-font="2"] { --f: 1.2; } body.cook[data-font="3"] { --f: 1.45; } b
 }
 .cookbar .units { font-size: .75em; } .cookbar .units button { padding: 4px 8px; }
 @media (max-width: 800px) { .cookbar .units button[data-u=original] { display: none; } }
+
+/* read aloud (tts.js) */
+.cookbar #btnSpeak.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.step .read, #ing h2 .read { display: inline-block; margin-top: 8px; font: inherit; font-size: .8em; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--ink); background: var(--panel); cursor: pointer; }
+#ing h2 .read { margin: 0 0 0 10px; vertical-align: middle; }
+.step.speaking { box-shadow: inset 4px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); border-radius: 10px; }
+.voice-panel { position: sticky; top: 52px; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+  margin: 0 14px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 0 0 12px 12px; box-shadow: var(--shadow); font-size: .9em; }
+.voice-panel select { max-width: 100%; font: inherit; padding: 4px 6px; }
+.voice-panel input[type=range] { width: 140px; vertical-align: middle; }
+.voice-panel output { display: inline-block; min-width: 3.2em; font-variant-numeric: tabular-nums; }
+.voice-panel .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.voice-panel button { font: inherit; padding: 5px 12px; border-radius: 8px; border: 1px solid var(--accent); background: none; color: var(--accent); cursor: pointer; }
+@media (max-width: 640px) { .voice-panel { margin: 0; border-radius: 0; } .voice-panel label { width: 100%; } .voice-panel input[type=range] { width: 60%; } }
+.voice-panel[hidden] { display: none; }
+/* phones: the cook bar must fit 360-390 px with read aloud added */
+@media (max-width: 640px) {
+  .cookbar { gap: 6px; padding: 8px 8px; }
+  .cookbar button { padding: 6px 8px; }
+  .cookbar #btnFull { display: none; }
+  .cookbar #btnVoice .txt { display: none; }
+  .cookbar .servings span { min-width: 4.5em; }
+}
+
+/* the ingredients a step uses, under the step (collapsible) */
+.step-ing { margin: 8px 0 2px; font-size: .86em; }
+.step-ing > summary { cursor: pointer; color: var(--muted); font-weight: 600; list-style: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px 3px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); user-select: none; }
+.step-ing > summary::-webkit-details-marker { display: none; }
+.step-ing > summary::before { content: "▸"; transition: transform .15s; }
+.step-ing[open] > summary::before { transform: rotate(90deg); }
+.step-ing > summary .n { background: var(--chip); color: var(--ink); border-radius: 999px; padding: 0 7px; font-size: .9em; }
+.step-ing ul { list-style: none; margin: 6px 0 0; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; }
+.step-ing li { padding: 3px 0; }
+.step-ing li .q { font-weight: 700; margin-right: 2px; }
+.step-ing .prep { color: var(--muted); }
+.step.done .step-ing { display: none; }

@@ -12,12 +12,15 @@ router = APIRouter(prefix="/recipes")
 
 
 def recipe_json(r) -> dict:
+    from ...domain.step_ingredients import ingredients_by_step
+    uses = ingredients_by_step(r.steps, r.ingredients)
     return {
         "id": r.id, "title": r.title, "servings": r.servings, "yield_text": r.yield_text,
         "ingredients": [{"id": i.id, "group": i.group_name, "raw": i.raw_text, "quantity": i.quantity,
                          "quantity_max": i.quantity_max, "unit": i.unit, "unit_raw": i.unit_raw, "name": i.name,
                          "preparation": i.preparation, "optional": bool(i.optional)} for i in r.ingredients],
-        "steps": [{"id": s.id, "group": s.group_name, "text": s.text, "minutes": s.minutes} for s in r.steps],
+        "steps": [{"id": s.id, "group": s.group_name, "text": s.text, "minutes": s.minutes,
+                   "ingredients": uses.get(s.id, [])} for s in r.steps],
     }
 
 

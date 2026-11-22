@@ -110,6 +110,19 @@ def test_recipe_text_is_made_speakable(raw, spoken):
     assert speakable(raw) == spoken
 
 
+def test_cook_mode_has_read_aloud(client, library):
+    from recipelib.db.engine import session_scope
+    from recipelib.db.models import Recipe, Step
+    with session_scope() as s:
+        r = Recipe(title="Soup", status="ready")
+        r.steps.append(Step(position=0, text="Chop the onion."))
+        s.add(r)
+        s.flush()
+        rid = r.id
+    html = client.get(f"/recipes/{rid}/cook").text
+    assert 'id="btnSpeak"' in html and 'id="voicePanel"' in html and "tts.js" in html
+
+
 def test_voice_download_addresses():
     from recipelib.tts import VOICES_URL, voice_url
     assert voice_url("en_US-lessac-medium") == f"{VOICES_URL}/en/en_US/lessac/medium/en_US-lessac-medium.onnx"

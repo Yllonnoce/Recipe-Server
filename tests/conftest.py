@@ -1,4 +1,6 @@
 import os
+import socket
+import threading
 import time
 from pathlib import Path
 
@@ -53,3 +55,30 @@ def wait_for(pred, timeout=20.0, step=0.2):
             return v
         time.sleep(step)
     raise AssertionError("timed out waiting")
+
+
+@pytest.fixture()
+def live(client, library):
+    """The app on a real port, for a real browser."""
+    pw = pytest.importorskip("playwright.sync_api")
+    import uvicorn
+    from recipelib.app import create_app
+    with socket.socket() as so:
+        so.bind(("127.0.0.1", 0))
+        port = so.getsockname()[1]
+    srv = uvicorn.Server(uvicorn.Config(create_app(), host="127.0.0.1", port=port, log_level="warning"))
+    threading.Thread(target=srv.run, daemon=True).start()
+    for _ in range(100):
+        if srv.started:
+            break
+        time.sleep(0.05)
+    try:
+        with pw.sync_playwright() as p:
+            try:
+                b = p.chromium.launch()
+            except Exception as e:  # noqa: BLE001
+                pytest.skip(f"no browser for playwright: {e}")
+            yield b, f"http://127.0.0.1:{port}"
+            b.close()
+    finally:
+        srv.should_exit = True

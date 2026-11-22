@@ -14,8 +14,10 @@ search, read, cook, plan meals and build a shopping list from any browser.
   pan, bookmarks, table of contents, fullscreen, and resume-where-you-left-off.
 - **Structured recipes** from page markup when available, otherwise from a local Ollama
   model over the page text (with OCR for scans). Everything is editable.
-- **Cook mode** for the kitchen tablet: big type, scale servings, tick off steps, timers,
-  screen stays awake.
+- **Cook mode** for the kitchen tablet: big type, scale servings, tick off steps, each
+  step's ingredients and amounts under it, screen stays awake, and **read aloud**: natural
+  Piper voices read each step as you tick the last one off (see [docs/voice.md](docs/voice.md)).
+- **Timers** that keep running on every page and ring until you stop them.
 - **Shopping list** that merges ingredients across recipes and sorts by aisle.
 - **Meal plan** by week, with a one-click shopping list for the week.
 - **Search** across titles, ingredients, tags and the full PDF text.
