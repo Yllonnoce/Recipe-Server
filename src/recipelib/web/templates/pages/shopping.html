@@ -23,8 +23,13 @@ document.getElementById('shareBtn').addEventListener('click', async () => {
     <h1>Shopping list <span class="print-only muted" style="font-size:.6em;font-weight:400">{{ today }}</span></h1>
     <button class="btn" id="shareBtn" type="button" title="Send the list to Google Keep, Notes, Messages…">📤 Share</button>
     <button class="btn" type="button" onclick="window.print()" title="Print the list">🖨 Print</button>
-    <a class="btn" href="{{ request.url_for('shopping_text') }}" target="_blank" title="Plain text, one item per line">Text</a>
+    <a class="btn" href="{{ request.url_for('shopping_text') }}" target="_blank" title="Plain text with a heading for each {{ 'recipe' if by == 'recipe' else 'aisle' }}">Text</a>
   </div>
+  <nav class="seg-switch" aria-label="Group the list by">
+    <span class="muted">Group by</span>
+    <a href="{{ request.url_for('shopping') }}?by=aisle" class="{{ 'on' if by != 'recipe' }}" {{ 'aria-current="true"' if by != 'recipe' }}>Aisle</a>
+    <a href="{{ request.url_for('shopping') }}?by=recipe" class="{{ 'on' if by == 'recipe' }}" {{ 'aria-current="true"' if by == 'recipe' }}>Recipe</a>
+  </nav>
   <form class="add" hx-post="{{ request.url_for('shopping_add_item') }}" hx-target="#list" hx-on::after-request="this.reset()">
     <input name="text" placeholder="Add an item, e.g. 2 lb apples" autocomplete="off" required>
     <button class="btn primary" type="submit">Add</button>

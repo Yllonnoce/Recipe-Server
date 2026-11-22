@@ -6,14 +6,14 @@
   <button class="btn small" hx-post="{{ request.url_for('shopping_clear') }}" hx-target="#list">Clear checked</button>
   <button class="btn small" hx-post="{{ request.url_for('shopping_clear_all') }}" hx-target="#list" hx-confirm="Empty the whole list?">Empty list</button>
 </div>
-{% for aisle, items in groups %}
-<div class="group">
-  <h3>{{ aisle }}</h3>
-  {% for it in items %}
+{% for head, rows in groups %}
+<div class="group{{ ' by-recipe' if by == 'recipe' }}">
+  <h3>{{ head }}</h3>
+  {% for row in rows %}{% set it = row.it %}
   <div class="row {{ 'checked' if it.checked }}">
     <span class="box" hx-post="{{ request.url_for('shopping_toggle', item_id=it.id) }}" hx-target="#list">{{ '✓' if it.checked }}</span>
-    <span><span class="q">{{ it.quantity|qty(it.unit) }} {{ it.unit or '' }}</span> {{ it.name }}</span>
-    {% set src = sources_of(it) %}{% if src %}<span class="from" title="{{ src|join(', ') }}">{{ src|join(', ')|truncate(40) }}</span>{% endif %}
+    <span><span class="q">{{ row.qty|qty(row.unit) }} {{ row.unit or '' }}</span> <span class="nm">{{ it.name }}</span></span>
+    {% if row.note %}<span class="from" title="{{ row.note }}">{{ row.note|truncate(40) }}</span>{% endif %}
     <button class="x" hx-post="{{ request.url_for('shopping_delete', item_id=it.id) }}" hx-target="#list" title="Remove">×</button>
   </div>
   {% endfor %}

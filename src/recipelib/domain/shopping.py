@@ -107,7 +107,7 @@ def add_recipe(s: Session, lst: ShoppingList, r: Recipe, servings: float | None 
             continue
         q = round(ing.quantity * factor, 3) if ing.quantity is not None else None
         add_ingredient(s, lst, name=ing.name, name_norm=ing.name_norm or normalize_name(ing.name), quantity=q,
-                       unit=ing.unit, source={"recipe_id": r.id, "title": r.title, "ingredient_id": ing.id, "qty": q})
+                       unit=ing.unit, source={"recipe_id": r.id, "title": r.title, "ingredient_id": ing.id, "qty": q, "unit": ing.unit})
         n += 1
     return n
 
@@ -130,6 +130,51 @@ def grouped(lst: ShoppingList) -> list[tuple[str, list[ShoppingItem]]]:
         items = sorted(buckets.get(k, []), key=lambda i: (i.checked, i.name_norm))
         if items:
             out.append((k, items))
+    return out
+
+
+HAND = "Added by hand"
+
+
+def _sources(item: ShoppingItem) -> list[dict]:
+    try:
+        return [x for x in json.loads(item.sources or "[]") if isinstance(x, dict) and x.get("title")]
+    except ValueError:
+        return []
+
+
+def rows(lst: ShoppingList, by: str = "aisle") -> list[tuple[str, list[dict]]]:
+    """The list as (heading, rows). by='aisle' groups by shop aisle; by='recipe' gives each
+    recipe its own heading, so an item two recipes share shows under both (with that
+    recipe's own amount when it is known) and items typed in by hand come last.
+    A row is {it, qty, unit, note}; ticking a row ticks the one item behind it."""
+    if by != "recipe":
+        return [(aisle, [{"it": it, "qty": it.quantity, "unit": it.unit, "note": ", ".join(sources_of(it)) or None}
+                         for it in items]) for aisle, items in grouped(lst)]
+    aisle_rank = {a: i for i, (a, _) in enumerate(AISLES)}
+    order: list[str] = []
+    groups: dict[str, list[dict]] = {}
+    for it in lst.items:
+        srcs = _sources(it)
+        titles = list(dict.fromkeys(x["title"] for x in srcs))
+        if not titles:
+            groups.setdefault(HAND, []).append({"it": it, "qty": it.quantity, "unit": it.unit, "note": None})
+            continue
+        for t in titles:
+            if t not in groups:
+                order.append(t)
+                groups[t] = []
+            mine = [x for x in srcs if x["title"] == t]
+            others = [o for o in titles if o != t]
+            qty, unit = it.quantity, it.unit
+            # this recipe's own share, when the item is shared and the share is recorded in a unit we know
+            if others and all(x.get("qty") is not None and "unit" in x for x in mine) and len({x["unit"] for x in mine}) == 1:
+                qty, unit = round(sum(x["qty"] for x in mine), 3), mine[0]["unit"]
+            groups[t].append({"it": it, "qty": qty, "unit": unit, "note": ("also for " + ", ".join(others)) if others else None})
+    out = []
+    for t in order + ([HAND] if HAND in groups else []):
+        rs = sorted(groups[t], key=lambda r: (r["it"].checked, aisle_rank.get(r["it"].category or "other", 99), r["it"].name_norm))
+        out.append((t, rs))
     return out
 
 
@@ -160,16 +205,22 @@ def sources_of(item: ShoppingItem) -> list[str]:
         return []
 
 
-def as_text(lst: ShoppingList, include_checked: bool = False) -> str:
-    """One item per line, ready to paste into Google Keep (Show checkboxes),
-    Notes, Reminders or a text message."""
+def as_text(lst: ShoppingList, include_checked: bool = False, by: str = "aisle", flat: bool = False) -> str:
+    """Ready to paste into Google Keep (Show checkboxes), Notes, Reminders or a text message:
+    a heading per aisle (or per recipe) with its items under it, groups separated by a
+    blank line. flat=True gives just the items, one per line, for automations."""
     from ..extract.normalize import format_quantity
-    lines = []
-    for _aisle, items in grouped(lst):
-        for it in items:
+    blocks = []
+    for head, rs in rows(lst, "aisle" if flat else by):   # flat: one line per item, with totals
+        lines = []
+        for r in rs:
+            it = r["it"]
             if it.checked and not include_checked:
                 continue
-            q = format_quantity(it.quantity, it.unit)
-            parts = [x for x in (q, it.unit or "", it.name) if x]
-            lines.append(" ".join(parts))
-    return "\n".join(lines)
+            q = format_quantity(r["qty"], r["unit"])
+            lines.append(" ".join(x for x in (q, r["unit"] or "", it.name) if x))
+        if lines:
+            blocks.append(lines if flat else [head.upper()] + lines)
+    if flat:
+        return "\n".join(line for b in blocks for line in b)
+    return "\n\n".join("\n".join(b) for b in blocks)

@@ -386,3 +386,13 @@ table.jobs .jobstep { font-size: .85em; margin-top: 3px; }
 /* network scans: the waiting indicator gets the same moving bar */
 .scan-ind .bar { display: block; width: 220px; max-width: 100%; }
 .scan-ind .bar .fill { display: block; }
+
+/* shopping list: group by aisle or by recipe */
+.seg-switch { display: flex; align-items: center; gap: 0; margin: 4px 0 10px; font-size: .9em; }
+.seg-switch .muted { margin-right: 10px; }
+.seg-switch a { padding: 5px 14px; border: 1px solid var(--line); color: var(--ink); text-decoration: none; background: var(--panel); }
+.seg-switch a:first-of-type { border-radius: 999px 0 0 999px; }
+.seg-switch a:last-of-type { border-radius: 0 999px 999px 0; border-left: 0; }
+.seg-switch a.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.shop .group.by-recipe h3 { text-transform: none; letter-spacing: 0; font-size: .95em; color: var(--ink); }
+@media print { .seg-switch { display: none; } }

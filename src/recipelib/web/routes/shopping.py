@@ -13,30 +13,45 @@ from ..templating import templates
 router = APIRouter()
 
 
-def _ctx(s: Session) -> dict:
+BY_COOKIE = "rl_shop_by"
+
+
+def _by(request: Request) -> str:
+    """Group by 'aisle' (default) or 'recipe': ?by= on the page, else the remembered choice."""
+    by = request.query_params.get("by") or request.cookies.get(BY_COOKIE) or "aisle"
+    return "recipe" if by == "recipe" else "aisle"
+
+
+def _ctx(s: Session, request: Request) -> dict:
     lst = S.default_list(s)
-    return {"lst": lst, "groups": S.grouped(lst), "sources_of": S.sources_of,
+    by = _by(request)
+    return {"lst": lst, "groups": S.rows(lst, by), "by": by,
             "n_open": sum(1 for i in lst.items if not i.checked)}
 
 
 @router.get("/shopping", name="shopping")
 def shopping(request: Request, s: Session = Depends(get_db)):
     from datetime import date
-    return templates.TemplateResponse(request, "pages/shopping.html", {**_ctx(s), "today": date.today().strftime("%A %b %-d")})
+    resp = templates.TemplateResponse(request, "pages/shopping.html", {**_ctx(s, request), "today": date.today().strftime("%A %b %-d")})
+    if "by" in request.query_params:
+        resp.set_cookie(BY_COOKIE, _by(request), max_age=3600 * 24 * 365, samesite="lax")
+    return resp
 
 
 @router.get("/shopping.txt", name="shopping_text")
 def shopping_text(request: Request, s: Session = Depends(get_db)):
-    """Plain text, one item per line. Paste into Google Keep and tap
-    'Show checkboxes' to get a checklist; also handy for automations."""
+    """Plain text: a heading per aisle (or per recipe, following the page) with its items.
+    Paste into Google Keep and tap 'Show checkboxes' to get a checklist. ?flat=1 gives
+    one item per line and nothing else, for automations."""
     from fastapi.responses import PlainTextResponse
-    body = S.as_text(S.default_list(s), include_checked=request.query_params.get("all") == "1")
+    body = S.as_text(S.default_list(s), include_checked=request.query_params.get("all") == "1",
+                     by=_by(request), flat=request.query_params.get("flat") == "1")
     return PlainTextResponse(body + ("\n" if body else ""), headers={"Cache-Control": "no-store"})
 
 
 @router.get("/partials/shopping", name="shopping_partial")
 def shopping_partial(request: Request, s: Session = Depends(get_db)):
-    return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s))
+    return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s, request))
 
 
 @router.post("/shopping/add-recipe/{recipe_id}", name="shopping_add_recipe")
@@ -60,7 +75,7 @@ def add_recipe(recipe_id: int, request: Request, servings: str = Form(""), s: Se
 def add_item(request: Request, text: str = Form(""), s: Session = Depends(get_db)):
     S.add_manual(s, S.default_list(s), text)
     s.commit()
-    return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s))
+    return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s, request))
 
 
 @router.post("/shopping/items/{item_id}/toggle", name="shopping_toggle")
@@ -69,7 +84,7 @@ def toggle(item_id: int, request: Request, s: Session = Depends(get_db)):
     if it is not None:
         it.checked = 0 if it.checked else 1
         s.commit()
-    return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s))
+    return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s, request))
 
 
 @router.post("/shopping/items/{item_id}/delete", name="shopping_delete")
@@ -78,18 +93,18 @@ def delete(item_id: int, request: Request, s: Session = Depends(get_db)):
     if it is not None:
         S.remove_item(s, S.default_list(s), it)
         s.commit()
-    return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s))
+    return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s, request))
 
 
 @router.post("/shopping/clear-checked", name="shopping_clear")
 def clear(request: Request, s: Session = Depends(get_db)):
     S.clear_checked(s, S.default_list(s))
     s.commit()
-    return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s))
+    return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s, request))
 
 
 @router.post("/shopping/clear-all", name="shopping_clear_all")
 def clear_all(request: Request, s: Session = Depends(get_db)):
     S.clear_all(s, S.default_list(s))
     s.commit()
-    return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s))
+    return templates.TemplateResponse(request, "partials/shopping_list.html", _ctx(s, request))
