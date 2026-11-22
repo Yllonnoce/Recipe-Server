@@ -55,8 +55,13 @@ set "RECIPES=%HERE%\.venv\Scripts\recipes.exe"
 
 echo.
 echo ==^> Installing Recipe Library and its dependencies
-uv pip install --python "%PY%" -e ".[ocr]"
-if errorlevel 1 goto fail
+rem read aloud (Piper) is optional: if it will not install here, carry on without it
+uv pip install --python "%PY%" -e ".[ocr,voice]"
+if errorlevel 1 (
+  echo !!  Read aloud ^(Piper^) did not install; cook mode will use the device's own voice instead
+  uv pip install --python "%PY%" -e ".[ocr]"
+  if errorlevel 1 goto fail
+)
 
 if "%BROWSER%"=="1" (
   echo.
@@ -92,6 +97,10 @@ if "%MODEL%"=="1" (
 echo.
 echo ==^> Writing the config file and creating %USERPROFILE%\RecipeLibrary
 "%RECIPES%" init
+echo.
+echo ==^> Downloading the voices for reading recipes aloud (about 500 MB, listed in src\recipelib\voices.txt)
+"%RECIPES%" voices sync
+if errorlevel 1 echo !!  Not every voice downloaded; the server fetches the rest when it starts, or run: recipes voices sync
 if "%PORT80%"=="1" (
   echo     Web app on port 80
   "%RECIPES%" config set port 80

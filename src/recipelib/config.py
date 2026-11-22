@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     llm_enabled: bool = True
     llm_keep_loaded: bool = True        # warm the model at startup and keep it in memory (faster captures, uses RAM)
 
+    # read aloud (Piper text-to-speech, see docs/voice.md)
+    tts_enabled: bool = True
+    tts_voice: str = "en_US-lessac-medium"   # default voice; each device can pick its own in cook mode
+    voices_dir: Path | None = None           # Piper *.onnx + *.onnx.json voices; default RecipeLibrary/voices
+    tts_fetch_voices: bool = True            # download the voices in voices.txt that are missing, at startup
+
     @property
     def db_path(self) -> Path:
         return self.library_dir / "recipes.db"
@@ -86,6 +92,10 @@ class Settings(BaseSettings):
     @property
     def inbox_dir(self) -> Path:
         return self.library_dir / "inbox"
+
+    @property
+    def voices_path(self) -> Path:
+        return Path(self.voices_dir).expanduser() if self.voices_dir else self.library_dir / "voices"
 
     @property
     def logs_dir(self) -> Path:
@@ -148,7 +158,10 @@ def write_default_config(force: bool = False) -> Path:
         "# local LLM\n"
         f'ollama_host = "{s.ollama_host}"\n'
         f'ollama_model = "{s.ollama_model}"\n'
-        f"llm_enabled = {str(s.llm_enabled).lower()}\n",
+        f"llm_enabled = {str(s.llm_enabled).lower()}\n\n"
+        "# read aloud in cook mode (Piper voices live in RecipeLibrary/voices)\n"
+        f"tts_enabled = {str(s.tts_enabled).lower()}\n"
+        f'tts_voice = "{s.tts_voice}"\n',
         encoding="utf-8",
     )
     return p

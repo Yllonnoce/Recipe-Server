@@ -38,6 +38,14 @@ def run_checks(quick: bool = False) -> list[Check]:
     except Exception:  # noqa: BLE001
         out.append(Check("OCR (rapidocr)", False, "not installed: pip install 'recipelib[ocr]'"))
     try:
+        from . import tts
+        cat = tts.catalog()
+        out.append(Check("Read aloud (Piper)", cat["enabled"],
+                         f"{len(cat['voices'])} voices, default {cat['default']}" if cat["enabled"]
+                         else f"{cat['reason']}; cook mode uses the device's own voice. Add voices with: recipes voices add en_US-lessac-medium"))
+    except Exception as e:  # noqa: BLE001
+        out.append(Check("Read aloud (Piper)", False, f"{type(e).__name__}: {e}"))
+    try:
         from playwright.sync_api import sync_playwright  # noqa: F401
         import os
         from pathlib import Path

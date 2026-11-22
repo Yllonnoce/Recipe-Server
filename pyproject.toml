@@ -30,6 +30,8 @@ dependencies = [
 
 [project.optional-dependencies]
 ocr = ["rapidocr>=3.0", "onnxruntime>=1.17"]
+# read aloud in cook mode; Piper (piper1-gpl) is GPL-3.0, installed as a separate package, not bundled
+voice = ["piper-tts==1.8.0", "numpy>=1.26"]
 dev = ["pytest>=8.0", "pytest-timeout>=2.3"]
 
 [project.scripts]
@@ -39,7 +41,7 @@ recipes = "recipelib.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-recipelib = ["db/migrations/*.sql", "web/templates/**/*.html", "web/static/**/*"]
+recipelib = ["db/migrations/*.sql", "web/templates/**/*.html", "web/static/**/*", "voices.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

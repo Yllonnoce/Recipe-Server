@@ -1,0 +1,12 @@
+# Standard read-aloud voices. Every Recipe Library server downloads any of these it does not
+# have, in the background when it starts, so adding a name here and pushing to GitHub puts
+# the voice on every instance at its next update (Settings -> Update now restarts the server).
+# Names: https://rhasspy.github.io/piper-samples (language-speaker-quality). Medium voices
+# are about 60 MB, high ones about 110 MB. Removing a name does not delete the voice anywhere.
+# Turn fetching off on one machine with: recipes config set tts_fetch_voices false
+en_US-lessac-medium
+en_US-amy-medium
+en_US-ryan-high
+en_GB-cori-high
+en_GB-jenny_dioco-medium
+en_GB-alan-medium

@@ -248,6 +248,51 @@ def restore(zip_path: Path, replace: bool = typer.Option(False, help="wipe the l
     typer.echo(stats.summary())
 
 
+voices_cli = typer.Typer(help="Piper voices for reading recipes aloud in cook mode.")
+cli.add_typer(voices_cli, name="voices")
+
+
+@voices_cli.command("list")
+def voices_list():
+    """Show the voices this server can read with."""
+    from . import tts
+    cat = tts.catalog()
+    typer.echo(f"voices folder: {tts.registry().dir}")
+    if not cat["enabled"]:
+        typer.echo(f"read aloud is not available: {cat['reason']}")
+    for v in cat["voices"]:
+        typer.echo(f"  {'*' if v['id'] == cat['default'] else ' '} {v['id']:32s} {v['label']}")
+
+
+@voices_cli.command("sync")
+def voices_sync():
+    """Download the standard voices (voices.txt, shipped with the app) that this server lacks."""
+    from . import tts
+    got = tts.ensure_voices(say=typer.echo)
+    want = tts.standard_voices()
+    missing = [n for n in want if n not in tts.registry().names()]
+    typer.echo(f"{len(want) - len(missing)} of {len(want)} standard voices present" + (f"; downloaded {', '.join(got)}" if got else ""))
+    if missing:
+        typer.echo("not available: " + ", ".join(missing) + " (no internet, Piper not installed, or tts_fetch_voices = false)", err=True)
+        raise typer.Exit(1)
+
+
+@voices_cli.command("add")
+def voices_add(names: list[str] = typer.Argument(..., help="voice names, e.g. en_US-lessac-medium en_GB-cori-high "
+                                                         "(browse https://rhasspy.github.io/piper-samples)")):
+    """Download voices from Piper's voice collection into the voices folder."""
+    from . import tts
+    failed = 0
+    for n in names:
+        typer.echo(f"{n}:")
+        try:
+            tts.download_voice(n, say=typer.echo)
+        except Exception as e:  # noqa: BLE001
+            typer.echo(f"  failed: {type(e).__name__}: {e}", err=True)
+            failed += 1
+    raise typer.Exit(1 if failed else 0)
+
+
 config_cli = typer.Typer(help="Read or change the config file.")
 cli.add_typer(config_cli, name="config")
 

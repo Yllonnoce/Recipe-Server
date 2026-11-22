@@ -174,12 +174,14 @@ def update(deps: bool = True, browser: bool = True, restart: bool = True, logger
         STATE["step"] = "deps"
         if deps:
             uv = _uv()
-            if uv:
-                cmd = [uv, "pip", "install", "--python", sys.executable, "-q", "-e", ".[ocr]"]
-            else:
-                cmd = [sys.executable, "-m", "pip", "install", "-q", "-e", ".[ocr]"]
+            base = [uv, "pip", "install", "--python", sys.executable, "-q", "-e"] if uv else [sys.executable, "-m", "pip", "install", "-q", "-e"]
+            cmd = base + [".[ocr,voice]"]
             say("installing dependencies: " + " ".join(cmd[-3:]))
             r = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=900)
+            if r.returncode != 0:        # read aloud (Piper) is optional: retry without it
+                say("read aloud (Piper) did not install; continuing without it")
+                cmd = base + [".[ocr]"]
+                r = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=900)
             if r.returncode != 0:
                 say((r.stdout + r.stderr)[-1500:])
                 STATE["result"] = "failed"

@@ -51,7 +51,7 @@ docs/          install, printer, device checklist
 ## Development
 
 ```bash
-pip install -e ".[ocr,dev]"
+pip install -e ".[ocr,voice,dev]"
 pytest
 tests/e2e/run_ipptool.sh                  # needs a running server and cups-ipp-utils
 recipes serve --dump-ipp ~/ipp-dumps      # capture what a device sends the printer

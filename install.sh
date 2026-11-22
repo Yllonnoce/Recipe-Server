@@ -82,7 +82,11 @@ uv venv --python 3.12 --allow-existing .venv
 PY="$HERE/.venv/bin/python"
 
 say "Installing Recipe Library and its dependencies"
-uv pip install --python "$PY" -e ".[ocr]"
+# read aloud (Piper) is optional: if it will not install on this machine, carry on without it
+uv pip install --python "$PY" -e ".[ocr,voice]" || {
+  warn "Read aloud (Piper) did not install; cook mode will use the device's own voice instead"
+  uv pip install --python "$PY" -e ".[ocr]"
+}
 fi
 
 # ---------------------------------------------------------------- browser
@@ -142,6 +146,8 @@ fi
 if [ "$SKIP_INSTALL" = 0 ]; then
 say "Writing the config file and creating ~/RecipeLibrary"
 "$HERE/.venv/bin/recipes" init
+say "Downloading the voices for reading recipes aloud (about 500 MB, listed in src/recipelib/voices.txt)"
+"$HERE/.venv/bin/recipes" voices sync || warn "Not every voice downloaded; the server fetches the rest when it starts, or run: recipes voices sync"
 "$HERE/.venv/bin/recipes" doctor || true
 fi
 

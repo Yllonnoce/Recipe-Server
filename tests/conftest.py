@@ -13,6 +13,7 @@ def library(tmp_path, monkeypatch):
     monkeypatch.setenv("RECIPELIB_CONFIG", str(tmp_path / "config.toml"))
     monkeypatch.setenv("RECIPELIB_PRINTER_ENABLED", "false")
     monkeypatch.setenv("RECIPELIB_LLM_ENABLED", "false")
+    monkeypatch.setenv("RECIPELIB_TTS_FETCH_VOICES", "false")      # never download voices from tests
     monkeypatch.setenv("RECIPELIB_OCR_ENABLED", "false")
     monkeypatch.setenv("RECIPELIB_WATCH_INTERVAL", "0.3")
     monkeypatch.setenv("RECIPELIB_WORKERS", "1")

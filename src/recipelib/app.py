@@ -96,6 +96,20 @@ async def lifespan(app: FastAPI):
                     return
                 time.sleep(30)
         threading.Thread(target=_warm, name="llm-warmup", daemon=True).start()
+    if cfg.tts_enabled and cfg.tts_fetch_voices:
+        import threading
+
+        from . import tts
+
+        def _voices():
+            # voices.txt comes with the app (and with GitHub updates); fetch what this server lacks
+            try:
+                got = tts.ensure_voices()
+                if got:
+                    log.info("read aloud: downloaded %s", ", ".join(got))
+            except Exception:  # noqa: BLE001
+                log.exception("read aloud: fetching voices failed")
+        threading.Thread(target=_voices, name="voices-fetch", daemon=True).start()
     app.state.queue = queue
     app.state.printer = printer
     log.info("Recipe Library %s ready on http://%s:%s", __version__, cfg.host, cfg.port)
@@ -132,8 +146,8 @@ def create_app() -> FastAPI:
     static_dir = str(resources.files("recipelib.web") / "static")
     app.mount("/static", _Static(directory=static_dir), name="static")
 
-    from .web.routes import assets, capture, cook, library, mealplan, reader, recipe, settings, shopping
-    for mod in (library, recipe, reader, cook, capture, assets, settings, shopping, mealplan):
+    from .web.routes import assets, capture, cook, library, mealplan, reader, recipe, settings, shopping, voice
+    for mod in (library, recipe, reader, cook, capture, assets, settings, shopping, mealplan, voice):
         app.include_router(mod.router)
 
     @app.middleware("http")
