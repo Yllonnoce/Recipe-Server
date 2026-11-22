@@ -1,10 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="library">
-  <aside class="filters">
-    <form class="search" hx-get="{{ request.url_for('library_cards') }}" hx-trigger="input changed delay:300ms from:#q, submit" hx-target="#cards" hx-include="#filters" hx-push-url="false">
-      <input id="q" name="q" type="search" placeholder="Search recipes, ingredients…" value="{{ f.q }}" autocomplete="off">
-    </form>
+{% set n_active = (1 if f.tag else 0) + (1 if f.favorites else 0) + (1 if f.status else 0) + (1 if f.sort != 'newest' else 0) %}
+<div class="library" id="library">
+  <form class="search" hx-get="{{ request.url_for('library_cards') }}" hx-trigger="input changed delay:300ms from:#q, submit" hx-target="#cards" hx-include="#filters" hx-push-url="false">
+    <input id="q" name="q" type="search" placeholder="Search recipes, ingredients…" value="{{ f.q }}" autocomplete="off">
+  </form>
+  {# Phones only (see app.css): the filters slide in from the left over the page #}
+  <button class="filter-tab" id="filterTab" type="button" aria-controls="filters-panel" aria-expanded="false"
+          aria-label="Filters{% if n_active %}, {{ n_active }} on{% endif %}"><span class="lbl">Filters</span>{% if n_active %}<span class="badge">{{ n_active }}</span>{% endif %}</button>
+  <div class="filter-scrim" id="filterScrim"></div>
+  <aside class="filters" id="filters-panel" aria-label="Filters" tabindex="-1">
+    <div class="drawer-head"><strong>Filters</strong><button class="drawer-close" type="button" aria-label="Close filters">✕</button></div>
     <div id="filters">
       <input type="hidden" name="tag" value="{{ f.tag or '' }}">
       <input type="hidden" name="fav" value="{{ '1' if f.favorites else '' }}">
@@ -58,6 +64,56 @@
 {% endblock %}
 {% block scripts %}
 <script>
+/* Phones: the filter panel slides in from the left and floats over the cards.
+   It closes on a tap outside, a swipe to the left, ✕ or Esc; picking a filter
+   loads the page again with it closed. The tab tucks away while the page scrolls. */
+(function () {
+  const lib = document.getElementById('library'), tab = document.getElementById('filterTab');
+  const panel = document.getElementById('filters-panel'), scrim = document.getElementById('filterScrim');
+  const phone = window.matchMedia('(max-width: 640px), (pointer: coarse) and (max-height: 500px)');
+  const isOpen = () => lib.classList.contains('filters-open');
+  function sync() {
+    // off-screen links must not take keyboard focus or be read out
+    if (phone.matches && !isOpen()) panel.setAttribute('inert', ''); else panel.removeAttribute('inert');
+    document.documentElement.classList.toggle('noscroll', phone.matches && isOpen());
+    tab.setAttribute('aria-expanded', String(isOpen()));
+  }
+  function open() { lib.classList.add('filters-open'); sync(); panel.focus({ preventScroll: true }); }
+  function close() { if (!isOpen()) return; lib.classList.remove('filters-open'); sync(); tab.focus({ preventScroll: true }); }
+  tab.addEventListener('click', open);
+  scrim.addEventListener('click', close);
+  panel.querySelector('.drawer-close').addEventListener('click', close);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  phone.addEventListener('change', () => { lib.classList.remove('filters-open'); sync(); });
+
+  // swipe left to close; the panel follows the finger
+  let x0 = null, y0 = 0, dx = 0, horizontal = null;
+  panel.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; horizontal = null; }, { passive: true });
+  panel.addEventListener('touchmove', (e) => {
+    if (x0 === null) return;
+    const mx = e.touches[0].clientX - x0, my = e.touches[0].clientY - y0;
+    if (horizontal === null && Math.abs(mx) + Math.abs(my) > 8) horizontal = Math.abs(mx) > Math.abs(my);
+    if (!horizontal) return;
+    dx = Math.min(0, mx);
+    panel.style.transition = 'none';
+    panel.style.transform = 'translateX(' + dx + 'px)';
+  }, { passive: true });
+  panel.addEventListener('touchend', () => {
+    panel.style.transition = ''; panel.style.transform = '';
+    if (horizontal && dx < -70) close();
+    x0 = null;
+  });
+
+  let idle = null;
+  window.addEventListener('scroll', () => {
+    if (isOpen() || !phone.matches) return;
+    tab.classList.add('tucked');
+    clearTimeout(idle);
+    idle = setTimeout(() => tab.classList.remove('tucked'), 900);
+  }, { passive: true });
+  sync();
+})();
+
 /* Remember which sidebar sections are open; a section with an active filter always opens. */
 document.querySelectorAll('details.facet').forEach((d) => {
   const key = 'rl_facet_' + d.dataset.facet;
