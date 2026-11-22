@@ -107,3 +107,23 @@ def test_restore_rejects_random_zip(library, tmp_path):
     import pytest
     with pytest.raises(ValueError):
         B.restore(bad)
+
+
+def test_restore_never_writes_outside_the_assets_folder(client, library, tmp_path):
+    """A crafted backup (uploaded, or sent to /api/backup/receive) must not be able to
+    write files anywhere else on the machine."""
+    good = B.create_backup(tmp_path / "good.zip")
+    evil = tmp_path / "evil.zip"
+    outside = library.library_dir.parent
+    with zipfile.ZipFile(good) as src, zipfile.ZipFile(evil, "w") as z:
+        for n in src.namelist():
+            z.writestr(n, src.read(n))
+        z.writestr("assets/../../escaped.txt", "x")
+        z.writestr("assets/pdf/../../../escaped2.txt", "x")
+        z.writestr("assets/" + str(outside / "absolute.txt"), "x")
+        z.writestr("assets/pdf\\..\\..\\..\\escaped3.txt", "x")
+        z.writestr("assets/pdf/ab/ok.pdf", "%PDF-1.4 fine")
+    B.restore(evil, mode="merge")
+    assert not list(outside.rglob("escaped*.txt")) and not (outside / "absolute.txt").exists()
+    assert not list(tmp_path.rglob("escaped*.txt"))
+    assert (library.assets_dir / "pdf" / "ab" / "ok.pdf").read_text() == "%PDF-1.4 fine"   # normal files still restore

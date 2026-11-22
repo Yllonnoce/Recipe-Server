@@ -159,7 +159,11 @@ def restore(zip_path: Path, mode: str = "merge", overwrite: bool = False, progre
             asset_names = sorted(n for n in names if n.startswith("assets/") and not n.endswith("/"))
             for i, n in enumerate(asset_names):
                 progress("Copying PDFs and pictures", i, len(asset_names))
-                dest = cfg.assets_dir / n[len("assets/"):]
+                dest = _asset_dest(cfg.assets_dir, n[len("assets/"):])
+                if dest is None:
+                    log.warning("restore: skipped %r, a path outside the assets folder", n)
+                    stats.errors.append(f"skipped unsafe file name {n[:80]!r}")
+                    continue
                 if not dest.exists():
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     with z.open(n) as src, dest.open("wb") as dst:
@@ -216,6 +220,17 @@ def restore(zip_path: Path, mode: str = "merge", overwrite: bool = False, progre
         STATE["running"] = False
     log.info("restore from %s (%s): %s", zip_path.name, mode, stats.summary())
     return stats
+
+
+def _asset_dest(assets_dir: Path, rel: str) -> Path | None:
+    """Where a backup's assets/<rel> goes, or None when the name would land outside the
+    assets folder (a crafted zip: '..', an absolute path, backslashes, a drive letter)."""
+    parts = rel.split("/")
+    if not rel or "\\" in rel or ":" in rel or rel.startswith("/") or any(p in ("", ".", "..") for p in parts):
+        return None
+    root = assets_dir.resolve()
+    dest = (root / rel).resolve()
+    return dest if dest.is_relative_to(root) and dest != root else None
 
 
 def _wipe(s) -> None:
