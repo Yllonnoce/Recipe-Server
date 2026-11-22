@@ -29,7 +29,7 @@ h2 { font-size: 1.25em; margin: 1em 0 .4em; }
 h3 { font-size: 1em; margin: .8em 0 .2em; }
 h4 { margin: 16px 0 6px; font-size: .75em; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .muted { color: var(--muted); }
-code { background: var(--chip); padding: 1px 6px; border-radius: 4px; font-size: .9em; }
+code { background: var(--chip); padding: 1px 6px; border-radius: 4px; font-size: .9em; overflow-wrap: anywhere; }
 .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink); text-decoration: none;
   font: inherit; cursor: pointer; }
@@ -248,6 +248,16 @@ details.facet > summary h4 .sel { text-transform: none; letter-spacing: 0; color
 header.top nav .upd { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 1px 8px; font-size: .7em; vertical-align: middle; }
 pre.log { background: var(--chip); padding: 10px; border-radius: 8px; font-size: .8em; white-space: pre-wrap; max-height: 260px; overflow: auto; }
 .panel.wide { grid-column: 1 / -1; }
+/* Settings: "This server" and "Health" share one full row, half each; stacked on phones */
+.panel-pair { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 16px; }
+.panel-pair > .panel { min-width: 0; }   /* the row stretches, so Health is as tall as This server */
+/* Settings → Maintenance: each job's button with what it does beside it, progress underneath */
+.maint-row { display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 4px 20px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+h2 + .maint-row { border-top: 0; padding-top: 0; }
+.maint-row form .btn { width: 100%; }
+.maint-row > p { margin: 0; }
+.maint-row > .task { grid-column: 1 / -1; }
+@media (max-width: 640px) { .maint-row { grid-template-columns: minmax(0, 1fr); } }
 .backup-list { list-style: none; padding: 0; margin: 12px 0 0; }
 .backup-list li { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line); }
 .backup-list .bk-name { display: flex; flex-direction: column; min-width: 0; }

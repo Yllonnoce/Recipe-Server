@@ -4,6 +4,7 @@
 <h1>Settings</h1>
 {% if message %}<div class="banner info">{{ message }}</div>{% endif %}
 <div class="capture-grid">
+  <div class="panel-pair">
   <section class="panel">
     <h2>This server</h2>
     <table class="kv">
@@ -26,7 +27,8 @@
       {% for c in checks %}<tr><th>{{ '✅' if c.ok else '⚠️' }} {{ c.name }}</th><td>{{ c.detail }}</td></tr>{% endfor %}
     </table>
   </section>
-  <section class="panel">
+  </div>
+  <section class="panel wide" id="updates">
     <h2>Updates</h2>
     {% include "partials/update_status.html" %}
   </section>
@@ -92,18 +94,23 @@
     </ul>
     {% else %}<p class="muted">No backups yet.</p>{% endif %}
   </section>
-  <section class="panel">
+  <section class="panel wide" id="maintenance">
     <h2>Maintenance</h2>
-    <form method="post" action="{{ request.url_for('settings_reindex') }}" hx-post="{{ request.url_for('settings_reindex') }}" hx-target="#task-reindex" hx-swap="outerHTML"><button class="btn">Rebuild search index</button></form>
-    {% with kind="reindex", t=tasks["reindex"], error=None %}{% include "partials/task.html" %}{% endwith %}
-    <p></p>
-    <form method="post" action="{{ request.url_for('settings_categorize') }}" hx-post="{{ request.url_for('settings_categorize') }}" hx-target="#task-categorize" hx-swap="outerHTML"><button class="btn">Assign categories to all recipes</button></form>
-    {% with kind="categorize", t=tasks["categorize"], error=None %}{% include "partials/task.html" %}{% endwith %}
-    <p></p>
-    <form method="post" action="{{ request.url_for('settings_shrink') }}" hx-post="{{ request.url_for('settings_shrink') }}" hx-target="#task-shrink" hx-swap="outerHTML"><button class="btn">Shrink stored PDFs and pictures</button></form>
-    {% with kind="shrink", t=tasks["shrink"], error=None %}{% include "partials/task.html" %}{% endwith %}
-    <p class="muted">Downsamples images inside stored PDFs to {{ cfg.pdf_image_dpi }} dpi and converts covers and thumbnails to JPEG (quality {{ cfg.jpeg_quality }}). New captures are shrunk automatically{{ '' if cfg.shrink_files else ' (currently off: shrink_files = false)' }}.</p>
-    <p class="muted">Adds categories (Dinner, Dessert, Seafood…) from each recipe's title and ingredients. Categories you ticked by hand are kept.</p>
+    <div class="maint-row">
+      <form method="post" action="{{ request.url_for('settings_reindex') }}" hx-post="{{ request.url_for('settings_reindex') }}" hx-target="#task-reindex" hx-swap="outerHTML"><button class="btn">Rebuild search index</button></form>
+      <p class="muted">Rebuilds search from every recipe's title, ingredients, steps and page text. Use it if search misses a recipe you know is there.</p>
+      {% with kind="reindex", t=tasks["reindex"], error=None %}{% include "partials/task.html" %}{% endwith %}
+    </div>
+    <div class="maint-row">
+      <form method="post" action="{{ request.url_for('settings_categorize') }}" hx-post="{{ request.url_for('settings_categorize') }}" hx-target="#task-categorize" hx-swap="outerHTML"><button class="btn">Assign categories to all recipes</button></form>
+      <p class="muted">Adds categories (Dinner, Dessert, Seafood…) from each recipe's title and ingredients. Categories you ticked by hand are kept.</p>
+      {% with kind="categorize", t=tasks["categorize"], error=None %}{% include "partials/task.html" %}{% endwith %}
+    </div>
+    <div class="maint-row">
+      <form method="post" action="{{ request.url_for('settings_shrink') }}" hx-post="{{ request.url_for('settings_shrink') }}" hx-target="#task-shrink" hx-swap="outerHTML"><button class="btn">Shrink stored PDFs and pictures</button></form>
+      <p class="muted">Downsamples images inside stored PDFs to {{ cfg.pdf_image_dpi }} dpi and converts covers and thumbnails to JPEG (quality {{ cfg.jpeg_quality }}). New captures are shrunk automatically{{ '' if cfg.shrink_files else ' (currently off: shrink_files = false)' }}.</p>
+      {% with kind="shrink", t=tasks["shrink"], error=None %}{% include "partials/task.html" %}{% endwith %}
+    </div>
   </section>
 </div>
 {% endblock %}
