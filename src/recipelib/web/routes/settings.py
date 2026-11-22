@@ -202,9 +202,9 @@ def ollama_partial(request: Request):
 
 
 @router.post("/settings/ollama", name="settings_ollama_save")
-def ollama_save(request: Request, host: str = Form(""), model: str = Form("")):
+def ollama_save(request: Request, host: str = Form(""), model: str = Form(""), model_other: str = Form("")):
     from ... import llmhost
-    llmhost.save(host, model or get_settings().ollama_model)
+    llmhost.save(host, model_other.strip() or model or get_settings().ollama_model)
     cfg = get_settings()
     t = llmhost.test_host(cfg.ollama_host)
     if t["ok"] and cfg.llm_enabled and cfg.llm_keep_loaded and llmhost.has_model(t["models"], cfg.ollama_model):
@@ -222,10 +222,10 @@ def ollama_test(request: Request, host: str = Form("")):
 
 
 @router.post("/settings/ollama/pull", name="settings_ollama_pull")
-def ollama_pull(request: Request, model: str = Form("")):
+def ollama_pull(request: Request, model: str = Form(""), model_other: str = Form("")):
     from ... import llmhost
     cfg = get_settings()
-    llmhost.pull_async(model or cfg.ollama_model, cfg.ollama_host)
+    llmhost.pull_async(model_other.strip() or model or cfg.ollama_model, cfg.ollama_host)
     return templates.TemplateResponse(request, "partials/ollama.html", _ollama_ctx(test=llmhost.test_host(cfg.ollama_host, timeout=2.5)))
 
 

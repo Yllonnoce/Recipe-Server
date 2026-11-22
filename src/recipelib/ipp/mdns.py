@@ -18,21 +18,37 @@ log = logging.getLogger(__name__)
 SUBTYPES = ("_universal", "_print")
 
 
+def _usable(ip: str) -> bool:
+    return not ip.startswith("127.") and not ip.startswith("169.254.")
+
+
+def pick_ipv4s(routed: str | None, host_ips: list[str]) -> list[str]:
+    """The addresses to announce the printer at.
+
+    `routed` is the address this machine reaches the network from. When there is one it
+    is the only answer: the host name also resolves to Docker bridges and other internal
+    interfaces, and a phone that is handed one of those cannot reach the printer and
+    stops listing it. Without a route the host name's addresses are all there is."""
+    if routed and _usable(routed):
+        return [routed]
+    return sorted({ip for ip in host_ips if _usable(ip)})
+
+
 def local_ipv4s() -> list[str]:
-    ips: set[str] = set()
+    routed = None
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("10.255.255.255", 1))
-        ips.add(s.getsockname()[0])
+        s.connect(("10.255.255.255", 1))      # no packet is sent: this only asks the routing table
+        routed = s.getsockname()[0]
         s.close()
     except OSError:
         pass
+    host_ips: list[str] = []
     try:
-        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-            ips.add(info[4][0])
+        host_ips = [info[4][0] for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)]
     except OSError:
         pass
-    return sorted(ip for ip in ips if not ip.startswith("127.") and not ip.startswith("169.254."))
+    return pick_ipv4s(routed, host_ips)
 
 
 def txt_record(name: str, port: int, uuid: str, urf: list[str], formats: list[str], adminurl: str,

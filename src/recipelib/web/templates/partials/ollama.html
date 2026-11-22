@@ -2,9 +2,18 @@
   <form hx-post="{{ request.url_for('settings_ollama_save') }}" hx-target="#ollama" hx-swap="outerHTML" class="stack">
     <div class="row">
       <label>Ollama address <input name="host" value="{{ cfg.ollama_host }}" placeholder="http://127.0.0.1:11434 or http://gpu-box:11434" list="ollamaHosts"></label>
-      <label>Model <input name="model" value="{{ cfg.ollama_model }}" list="ollamaModels"></label>
+      {% if test and test.ok and test.models %}
+      {# A real <select>: an <input list> pre-filled with the current model only suggests entries matching it, so the other models never show #}
+      <label>Model <select name="model">
+        {% if cfg.ollama_model not in test.models %}<option value="{{ cfg.ollama_model }}" selected>{{ cfg.ollama_model }} (not on that machine)</option>{% endif %}
+        {% for m in test.models %}<option value="{{ m }}"{{ ' selected' if m == cfg.ollama_model }}>{{ m }}</option>{% endfor %}
+      </select></label>
+      <label>or another model <input name="model_other" value="" placeholder="e.g. llama3.1:8b, then Pull model there" list="ollamaSuggest"></label>
+      {% else %}
+      <label>Model <input name="model" value="{{ cfg.ollama_model }}" list="ollamaSuggest"></label>
+      {% endif %}
     </div>
-    <datalist id="ollamaModels">{% if test and test.models %}{% for m in test.models %}<option value="{{ m }}">{% endfor %}{% endif %}<option value="qwen3:8b"><option value="qwen3:4b"><option value="llama3.1:8b"></datalist>
+    <datalist id="ollamaSuggest"><option value="qwen3:8b"><option value="qwen3:4b"><option value="llama3.1:8b"></datalist>
     <datalist id="ollamaHosts">{% if scan %}{% for h in scan %}<option value="{{ h.host }}">{{ h.name or h.ip }}{% endfor %}{% endif %}</datalist>
     <div class="actions">
       <button class="btn primary" type="submit">Save &amp; use</button>
