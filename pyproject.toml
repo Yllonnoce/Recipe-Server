@@ -43,6 +43,13 @@ where = ["src"]
 [tool.setuptools.package-data]
 recipelib = ["db/migrations/*.sql", "web/templates/**/*.html", "web/static/**/*", "voices.txt"]
 
+# what Settings -> Update now installs. Read from this file after the pull, so an extra added
+# here is installed by the same update; "required" ones must install or the update stops,
+# the others are left out on machines where they will not install.
+[tool.recipelib.update]
+extras = ["ocr", "voice"]
+required = ["ocr"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 timeout = 120

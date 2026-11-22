@@ -148,6 +148,44 @@ def _uv() -> str | None:
     return None
 
 
+def install_extras(root: Path) -> tuple[list[str], list[str]]:
+    """(extras to install, the ones the app cannot do without), read from pyproject.toml on
+    disk. The update is run by the code that was running before the pull, so the list has to
+    come from the freshly pulled file, never from this module: otherwise a dependency added
+    in an update is only installed by the update after it."""
+    import tomllib
+    try:
+        data = tomllib.loads((Path(root) / "pyproject.toml").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ["ocr"], ["ocr"]
+    table = (data.get("tool") or {}).get("recipelib", {}).get("update", {})
+    if table.get("extras"):
+        want = [str(x) for x in table["extras"]]
+        return want, [x for x in table.get("required", want) if x in want]
+    want = [k for k in (data.get("project") or {}).get("optional-dependencies", {}) if k != "dev"]
+    return want, list(want)
+
+
+def install_deps(root: Path, say) -> bool:
+    """Install the package with its extras; an optional extra that will not install on this
+    machine (say Piper) is left out rather than failing the update."""
+    uv = _uv()
+    base = [uv, "pip", "install", "--python", sys.executable, "-q", "-e"] if uv else [sys.executable, "-m", "pip", "install", "-q", "-e"]
+    want, required = install_extras(root)
+    tries = [want] + ([required] if required != want else [])
+    r = None
+    for i, extras in enumerate(tries):
+        target = ".[" + ",".join(extras) + "]" if extras else "."
+        say("installing dependencies: " + target)
+        r = subprocess.run(base + [target], cwd=root, capture_output=True, text=True, timeout=900)
+        if r.returncode == 0:
+            if i:
+                say("left out, they would not install here (continuing without them): " + ", ".join(x for x in want if x not in extras))
+            return True
+    say((r.stdout + r.stderr)[-1500:])
+    return False
+
+
 def update(deps: bool = True, browser: bool = True, restart: bool = True, logger=None) -> tuple[bool, str]:
     """Pull, reinstall, migrate, restart. Returns (ok, log text)."""
     lines: list[str] = []
@@ -172,20 +210,9 @@ def update(deps: bool = True, browser: bool = True, restart: bool = True, logger
             STATE["result"] = "failed"
             return False, "\n".join(lines)
         STATE["step"] = "deps"
-        if deps:
-            uv = _uv()
-            base = [uv, "pip", "install", "--python", sys.executable, "-q", "-e"] if uv else [sys.executable, "-m", "pip", "install", "-q", "-e"]
-            cmd = base + [".[ocr,voice]"]
-            say("installing dependencies: " + " ".join(cmd[-3:]))
-            r = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=900)
-            if r.returncode != 0:        # read aloud (Piper) is optional: retry without it
-                say("read aloud (Piper) did not install; continuing without it")
-                cmd = base + [".[ocr]"]
-                r = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=900)
-            if r.returncode != 0:
-                say((r.stdout + r.stderr)[-1500:])
-                STATE["result"] = "failed"
-                return False, "\n".join(lines)
+        if deps and not install_deps(root, say):
+            STATE["result"] = "failed"
+            return False, "\n".join(lines)
         STATE["step"] = "browser"
         if browser:
             pw = Path(sys.executable).parent / ("playwright.exe" if sys.platform == "win32" else "playwright")

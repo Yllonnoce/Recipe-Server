@@ -86,3 +86,37 @@ def test_update_banner_on_every_page(client, monkeypatch):
     assert "A new version of Recipe Library is available (2 changes)" in html and "Update now" in html
     monkeypatch.setitem(updater.STATE, "updating", True)
     assert "A new version" not in client.get("/").text
+
+
+def test_the_extras_to_install_come_from_the_pulled_pyproject(tmp_path):
+    """The running (old) updater must install what the *new* code needs: an extra added in
+    this update is read from the freshly pulled pyproject.toml, not from the old code."""
+    from recipelib import updater
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\n'
+                                             '[project.optional-dependencies]\nocr = ["a"]\nvoice = ["b"]\nfancy = ["c"]\ndev = ["d"]\n'
+                                             '[tool.recipelib.update]\nextras = ["ocr", "voice", "fancy"]\nrequired = ["ocr"]\n')
+    assert updater.install_extras(tmp_path) == (["ocr", "voice", "fancy"], ["ocr"])
+    # without the table: every extra except dev, and nothing is optional
+    (tmp_path / "pyproject.toml").write_text('[project.optional-dependencies]\nocr = ["a"]\nvoice = ["b"]\ndev = ["d"]\n')
+    assert updater.install_extras(tmp_path) == (["ocr", "voice"], ["ocr", "voice"])
+
+
+def test_this_repos_update_list_installs_read_aloud():
+    from recipelib import updater
+    want, required = updater.install_extras(updater.repo_root())
+    assert "voice" in want and "ocr" in required and "voice" not in required
+
+
+def test_optional_extras_that_fail_are_dropped_not_the_update(tmp_path, monkeypatch):
+    from recipelib import updater
+    (tmp_path / "pyproject.toml").write_text('[tool.recipelib.update]\nextras = ["ocr", "voice"]\nrequired = ["ocr"]\n')
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd[-1])
+        return subprocess.CompletedProcess(cmd, 1 if "voice" in cmd[-1] else 0, "", "no wheel for piper")
+    monkeypatch.setattr(updater.subprocess, "run", fake_run)
+    said = []
+    assert updater.install_deps(tmp_path, said.append) is True
+    assert calls == [".[ocr,voice]", ".[ocr]"]
+    assert any("voice" in s and "continuing without" in s for s in said)
