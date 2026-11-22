@@ -1,0 +1,12 @@
+{# Progress of one long job from Settings (see tasks.py). Needs: kind, t (tasks.status(kind) or none), error. #}
+<div class="task" id="task-{{ kind }}" {% if t and t.running %}hx-get="{{ request.url_for('task_partial', kind=kind) }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {% if error %}<p class="task-msg bad">⚠️ {{ error }}</p>{% endif %}
+  {% if t and t.running %}
+    <div class="task-line"><span class="spin"></span> <strong>{{ t.label }}</strong>{% if t.step %} · {{ t.step }}{% endif %}{% if t.total %} · {{ t.done or 0 }} of {{ t.total }}{% endif %} <span class="muted">· {{ t.elapsed }}</span></div>
+    <div class="bar">{% if t.pct is not none %}<div class="fill" style="width:{{ t.pct }}%;animation:none;margin:0"></div>{% else %}<div class="fill"></div>{% endif %}</div>
+  {% elif t and not error %}
+    <p class="task-msg {{ 'ok' if t.ok else 'bad' }}">{{ '✅' if t.ok else '⚠️ Failed:' }} {{ t.message or (t.label ~ ' finished') }}
+      <span class="muted">· {{ t.finished }}, took {{ t.elapsed }}</span>
+      {% if kind in ('backup', 'restore') %}· <a href="{{ request.url_for('settings') }}#backups">refresh the page</a>{% endif %}</p>
+  {% endif %}
+</div>

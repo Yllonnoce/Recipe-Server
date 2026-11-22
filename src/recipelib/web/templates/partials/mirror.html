@@ -15,7 +15,8 @@
   <table class="kv">
     {% if test %}<tr><th>Test</th><td>{{ test }}</td></tr>{% endif %}
     <tr><th>Status</th><td>
-      {% if mirror.running %}<span class="spin"></span> syncing from {{ mirror.source }}…
+      {% if mirror.running %}<span class="spin"></span> syncing from {{ mirror.source }}{% if mt and mt.running %} · {{ mt.step or 'starting' }}{% if mt.total %} · {{ mt.done or 0 }} of {{ mt.total }}{% endif %} <span class="muted">· {{ mt.elapsed }}</span>{% else %} · downloading the backup…{% endif %}
+        <div class="bar">{% if mt and mt.running and mt.pct is not none %}<div class="fill" style="width:{{ mt.pct }}%;animation:none;margin:0"></div>{% else %}<div class="fill"></div>{% endif %}</div>
       {% elif mirror.result %}{{ '✅' if mirror.last_ok else '⚠️' }} {{ mirror.result }}
       {% elif cfg.mirror_of %}not synced yet (first pull runs a few minutes after startup, then every {{ cfg.mirror_interval_hours|int }} h)
       {% else %}off{% endif %}

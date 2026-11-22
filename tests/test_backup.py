@@ -22,6 +22,13 @@ def _add(client, tmp_path, title, ingredients="1 cup flour\n2 eggs"):
     return rid
 
 
+def _wait_task(kind):
+    """Backup and restore from Settings run in the background (recipelib.tasks)."""
+    from recipelib import tasks
+    wait_for(lambda: (tasks.status(kind) or {}).get("running") is False, timeout=30)
+    return tasks.status(kind)
+
+
 def test_backup_restore_merge_and_replace(client, library, tmp_path):
     a = _add(client, tmp_path, "Apple Pie")
     b = _add(client, tmp_path, "Banana Bread")
@@ -31,6 +38,7 @@ def test_backup_restore_merge_and_replace(client, library, tmp_path):
     # create through the page, check the zip
     r = client.post("/settings/backup", follow_redirects=False)
     assert r.status_code == 303
+    _wait_task("backup")
     zips = list((library.library_dir / "backups").glob("*.zip"))
     assert len(zips) == 1
     with zipfile.ZipFile(zips[0]) as z:
@@ -78,7 +86,9 @@ def test_backup_restore_merge_and_replace(client, library, tmp_path):
     # replace via the page
     _add(client, tmp_tmp := tmp_path, "Cherry Tart")
     r = client.post(f"/settings/backups/{zips[0].name}/restore", data={"mode": "replace"}, follow_redirects=False)
-    assert r.status_code == 303 and "Replaced" in r.headers["location"]
+    assert r.status_code == 303
+    st = _wait_task("restore")
+    assert st["ok"] and st["message"].startswith("Replaced"), st
     with session_scope() as s:
         titles = sorted(r.title for r in s.scalars(select(Recipe).where(Recipe.deleted_at.is_(None))))
         assert titles == ["Apple Pie", "Banana Bread"]

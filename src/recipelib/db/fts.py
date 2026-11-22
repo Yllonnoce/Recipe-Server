@@ -35,10 +35,12 @@ def reindex_recipe(s: Session, recipe_id: int) -> None:
     )
 
 
-def rebuild_all(s: Session) -> int:
+def rebuild_all(s: Session, report=None) -> int:
     s.execute(text("DELETE FROM recipes_fts"))
     ids = [row[0] for row in s.execute(text("SELECT id FROM recipes WHERE deleted_at IS NULL"))]
-    for rid in ids:
+    for i, rid in enumerate(ids):
+        if report:
+            report("Indexing recipes", i, len(ids))
         reindex_recipe(s, rid)
     return len(ids)
 

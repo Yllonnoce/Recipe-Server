@@ -14,6 +14,7 @@ from ...db.engine import get_db
 from ..templating import templates
 
 router = APIRouter()
+TASK_KINDS = ("backup", "restore", "shrink", "reindex", "categorize")
 
 
 @router.get("/settings", name="settings")
@@ -21,28 +22,62 @@ def settings(request: Request, s: Session = Depends(get_db)):
     from ...doctor import run_checks
     from ... import updater
     from ... import backup as B
+    from ... import tasks
     return templates.TemplateResponse(request, "pages/settings.html", {
-        **_update_ctx(), "backups": B.list_backups(), "bk": B.STATE, "shrink": SHRINK,
+        **_update_ctx(), "backups": B.list_backups(), "bk": B.STATE, "tasks": {k: tasks.status(k) for k in TASK_KINDS},
         "cfg": get_settings(), "config_path": config_path(), "version": __version__,
         "checks": run_checks(quick=True), "message": request.query_params.get("m"),
         "printer": getattr(request.app.state, "printer", None), "host": request.url.hostname,
     })
 
 
+# ---- long jobs: run in the background with progress (see tasks.py) ----------
+
+def _task_response(request: Request, kind: str, error: str | None = None, fallback_msg: str = ""):
+    """htmx gets the job's progress panel; a plain form post goes back to Settings."""
+    from ... import tasks
+    if request.headers.get("HX-Request") == "true":
+        return templates.TemplateResponse(request, "partials/task.html", {"kind": kind, "t": tasks.status(kind), "error": error})
+    return RedirectResponse(str(request.url_for("settings")) + "?m=" + (error or fallback_msg) + f"#task-{kind}", status_code=303)
+
+
+def _start(request: Request, kind: str, label: str, fn, blocks_writes: bool = False):
+    from ... import tasks
+    try:
+        tasks.start(kind, label, fn, blocks_writes=blocks_writes)
+    except tasks.Busy as e:
+        return _task_response(request, kind, error=f"Not started: {e}.")
+    return _task_response(request, kind, fallback_msg=f"{label} started; progress shows below")
+
+
+@router.get("/partials/task/{kind}", name="task_partial")
+def task_partial(request: Request, kind: str):
+    from ... import tasks
+    return templates.TemplateResponse(request, "partials/task.html", {"kind": kind, "t": tasks.status(kind), "error": None})
+
+
 @router.post("/settings/reindex", name="settings_reindex")
-def reindex(request: Request, s: Session = Depends(get_db)):
-    n = fts.rebuild_all(s)
-    s.commit()
-    return RedirectResponse(str(request.url_for("settings")) + f"?m=Search index rebuilt for {n} recipes", status_code=303)
+def reindex(request: Request):
+    from ...db.engine import session_scope
+
+    def run(report):
+        with session_scope() as s:
+            n = fts.rebuild_all(s, report=report)
+        return f"Search index rebuilt for {n} recipes"
+    return _start(request, "reindex", "Rebuilding the search index", run)
 
 
 @router.post("/settings/categorize", name="settings_categorize")
-def categorize(request: Request, s: Session = Depends(get_db)):
+def categorize(request: Request):
     """Auto-assign categories to every recipe (keeps ones picked by hand)."""
+    from ...db.engine import session_scope
     from ...domain import recipes as R
-    n = R.categorize_all(s)
-    s.commit()
-    return RedirectResponse(str(request.url_for("settings")) + f"?m=Categories assigned to {n} recipes", status_code=303)
+
+    def run(report):
+        with session_scope() as s:
+            n = R.categorize_all(s, report=report)
+        return f"Categories assigned to {n} recipes"
+    return _start(request, "categorize", "Assigning categories", run)
 
 
 def _update_ctx() -> dict:
@@ -107,8 +142,11 @@ def update_run(request: Request):
 @router.post("/settings/backup", name="settings_backup")
 def backup_create(request: Request):
     from ... import backup as B
-    p = B.create_backup()
-    return RedirectResponse(str(request.url_for("settings")) + f"?m=Backup written: {p.name}#backups", status_code=303)
+
+    def run(report):
+        p = B.create_backup(progress=report)
+        return f"Backup written: {p.name} ({p.stat().st_size / 1048576:.1f} MB)"
+    return _start(request, "backup", "Creating a backup", run)
 
 
 @router.get("/settings/backups/{name}", name="settings_backup_download")
@@ -138,12 +176,12 @@ def backup_restore(name: str, request: Request, mode: str = Form("merge"), overw
     p = B.backups_dir() / name
     if "/" in name or not p.is_file():
         raise HTTPException(404)
-    try:
-        stats = B.restore(p, mode="replace" if mode == "replace" else "merge", overwrite=overwrite == "1")
-        msg = ("Replaced the library from " if mode == "replace" else "Merged ") + name + ": " + stats.summary()
-    except Exception as e:  # noqa: BLE001
-        msg = f"Restore failed: {type(e).__name__}: {e}"
-    return RedirectResponse(str(request.url_for("settings")) + "?m=" + msg + "#backups", status_code=303)
+    replace = mode == "replace"
+
+    def run(report):
+        stats = B.restore(p, mode="replace" if replace else "merge", overwrite=overwrite == "1", progress=report)
+        return ("Replaced the library from " if replace else "Merged ") + name + ": " + stats.summary()
+    return _start(request, "restore", ("Replacing the library from " if replace else "Merging ") + name, run, blocks_writes=True)
 
 
 @router.post("/settings/backups/upload", name="settings_backup_upload")
@@ -161,28 +199,15 @@ async def backup_upload(request: Request, file: UploadFile = File(...)):
     return RedirectResponse(str(request.url_for("settings")) + f"?m=Uploaded {name}; choose Merge or Replace below#backups", status_code=303)
 
 
-SHRINK = {"running": False, "result": None}
-
-
 @router.post("/settings/shrink", name="settings_shrink")
 def shrink_files(request: Request):
     """Recompress stored PDFs and pictures in the background."""
-    import threading
-
     from ...capture.shrink import shrink_library
-    if not SHRINK["running"]:
-        SHRINK.update(running=True, result=None)
 
-        def run():
-            try:
-                t = shrink_library()
-                SHRINK["result"] = f"{t['files']} files looked at, {t['changed']} shrunk, {(t['before'] - t['after']) / 1048576:.1f} MB saved"
-            except Exception as e:  # noqa: BLE001
-                SHRINK["result"] = f"failed: {type(e).__name__}: {e}"
-            finally:
-                SHRINK["running"] = False
-        threading.Thread(target=run, name="shrink", daemon=True).start()
-    return RedirectResponse(str(request.url_for("settings")) + "?m=Shrinking stored files in the background; the result shows under Maintenance when done", status_code=303)
+    def run(report):
+        t = shrink_library(report=report)
+        return f"{t['files']} files looked at, {t['changed']} shrunk, {(t['before'] - t['after']) / 1048576:.1f} MB saved"
+    return _start(request, "shrink", "Shrinking stored PDFs and pictures", run)
 
 
 # ---- Ollama (local or on another machine) ---------------------------------
@@ -291,7 +316,8 @@ def api_backup_latest(s: Session = Depends(get_db)):
 
 def _mirror_ctx() -> dict:
     from ... import mirror
-    return {"cfg": get_settings(), "mirror": mirror.STATE}
+    from ... import tasks
+    return {"cfg": get_settings(), "mirror": mirror.STATE, "mt": tasks.status("mirror")}
 
 
 @router.get("/partials/mirror", name="mirror_partial")
@@ -356,8 +382,16 @@ async def api_backup_receive(request: Request, file: UploadFile = File(...), mod
     with dest.open("wb") as fh:
         while chunk := await file.read(1 << 20):
             fh.write(chunk)
+    from ... import tasks
+
+    def merge_in():
+        with tasks.exclusive("receive", f"Merging a backup sent by {sender}", blocks_writes=True) as report:
+            return B.restore(dest, "replace" if mode == "replace" else "merge", True, progress=report)
     try:
-        stats = await run_in_threadpool(B.restore, dest, "replace" if mode == "replace" else "merge", True)
+        stats = await run_in_threadpool(merge_in)
+    except tasks.Busy as e:
+        dest.unlink(missing_ok=True)
+        return JSONResponse({"ok": False, "error": f"busy: {e}; send again later"}, status_code=409)
     except Exception as e:  # noqa: BLE001
         dest.unlink(missing_ok=True)
         return JSONResponse({"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}, status_code=400)

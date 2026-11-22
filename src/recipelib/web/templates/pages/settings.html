@@ -41,7 +41,7 @@
     <form hx-post="{{ request.url_for('settings_scan') }}" hx-target="#netscan" hx-swap="outerHTML" hx-indicator="#netSpin" class="inline-form">
       <label class="mini">Port(s) <input name="port" placeholder="11434, 8000, 80, 8631" style="width:11em"></label>
       <button class="btn primary" type="submit">Scan network</button>
-      <span id="netSpin" class="htmx-indicator"><span class="spin"></span> scanning, about 10 seconds…</span>
+      <span id="netSpin" class="htmx-indicator scan-ind"><span class="spin"></span> scanning, about 10 seconds…<span class="bar"><span class="fill"></span></span></span>
     </form>
     <div id="netscan"></div>
   </section>
@@ -59,11 +59,14 @@
     <h2>Backups</h2>
     <p class="muted">A backup is one zip with the database and every PDF and picture. One is made automatically every {{ cfg.auto_backup_days|int if cfg.auto_backup_days == cfg.auto_backup_days|int else cfg.auto_backup_days }} day(s), keeping the newest {{ cfg.backup_keep }}, in <code>{{ cfg.library_dir }}/backups</code>. Copy them somewhere else too.</p>
     <div class="actions">
-      <form method="post" action="{{ request.url_for('settings_backup') }}"><button class="btn primary">Create backup now</button></form>
-      <form method="post" action="{{ request.url_for('settings_backup_upload') }}" enctype="multipart/form-data" class="inline-form">
+      <form method="post" action="{{ request.url_for('settings_backup') }}" hx-post="{{ request.url_for('settings_backup') }}" hx-target="#task-backup" hx-swap="outerHTML"><button class="btn primary">Create backup now</button></form>
+      <form method="post" action="{{ request.url_for('settings_backup_upload') }}" enctype="multipart/form-data" class="inline-form" id="uploadForm">
         <input type="file" name="file" accept=".zip" required style="width:auto"><button class="btn">Upload a backup</button>
       </form>
     </div>
+    <div id="uploadProgress" hidden><div class="task-line"><span class="spin"></span> <strong>Uploading</strong> <span id="uploadText"></span></div><div class="bar"><div class="fill" id="uploadBar" style="width:0;animation:none;margin:0"></div></div></div>
+    {% with kind="backup", t=tasks["backup"], error=None %}{% include "partials/task.html" %}{% endwith %}
+    {% with kind="restore", t=tasks["restore"], error=None %}{% include "partials/task.html" %}{% endwith %}
     {% if backups %}
     <ul class="backup-list">
       {% for b in backups %}
@@ -74,12 +77,12 @@
         </div>
         <div class="bk-actions">
           <a class="btn small" href="{{ request.url_for('settings_backup_download', name=b.name) }}">⬇ Download</a>
-          <form method="post" action="{{ request.url_for('settings_backup_restore', name=b.name) }}" onsubmit="return confirm('Merge this backup into the library? Recipes you already have are kept.')">
+          <form method="post" action="{{ request.url_for('settings_backup_restore', name=b.name) }}" hx-post="{{ request.url_for('settings_backup_restore', name=b.name) }}" hx-target="#task-restore" hx-swap="outerHTML" hx-confirm="Merge this backup into the library? Recipes you already have are kept.">
             <input type="hidden" name="mode" value="merge">
             <button class="btn small">Merge</button>
             <label class="check" title="Replace matching local recipes with the backup's version"><input type="checkbox" name="overwrite" value="1"> backup wins</label>
           </form>
-          <form method="post" action="{{ request.url_for('settings_backup_restore', name=b.name) }}" onsubmit="return confirm('REPLACE the whole library with this backup? Everything currently in it is deleted first.')">
+          <form method="post" action="{{ request.url_for('settings_backup_restore', name=b.name) }}" hx-post="{{ request.url_for('settings_backup_restore', name=b.name) }}" hx-target="#task-restore" hx-swap="outerHTML" hx-confirm="REPLACE the whole library with this backup? Everything currently in it is deleted first.">
             <input type="hidden" name="mode" value="replace"><button class="btn small danger">Replace library</button>
           </form>
           <form method="post" action="{{ request.url_for('settings_backup_delete', name=b.name) }}" onsubmit="return confirm('Delete this backup file?')"><button class="btn small">Delete</button></form>
@@ -91,13 +94,42 @@
   </section>
   <section class="panel">
     <h2>Maintenance</h2>
-    <form method="post" action="{{ request.url_for('settings_reindex') }}"><button class="btn">Rebuild search index</button></form>
+    <form method="post" action="{{ request.url_for('settings_reindex') }}" hx-post="{{ request.url_for('settings_reindex') }}" hx-target="#task-reindex" hx-swap="outerHTML"><button class="btn">Rebuild search index</button></form>
+    {% with kind="reindex", t=tasks["reindex"], error=None %}{% include "partials/task.html" %}{% endwith %}
     <p></p>
-    <form method="post" action="{{ request.url_for('settings_categorize') }}"><button class="btn">Assign categories to all recipes</button></form>
+    <form method="post" action="{{ request.url_for('settings_categorize') }}" hx-post="{{ request.url_for('settings_categorize') }}" hx-target="#task-categorize" hx-swap="outerHTML"><button class="btn">Assign categories to all recipes</button></form>
+    {% with kind="categorize", t=tasks["categorize"], error=None %}{% include "partials/task.html" %}{% endwith %}
     <p></p>
-    <form method="post" action="{{ request.url_for('settings_shrink') }}"><button class="btn" {{ 'disabled' if shrink.running }}>{{ 'Shrinking…' if shrink.running else 'Shrink stored PDFs and pictures' }}</button></form>
-    <p class="muted">Downsamples images inside stored PDFs to {{ cfg.pdf_image_dpi }} dpi and converts covers and thumbnails to JPEG (quality {{ cfg.jpeg_quality }}). New captures are shrunk automatically{{ '' if cfg.shrink_files else ' (currently off: shrink_files = false)' }}.{% if shrink.result %} <strong>Last run:</strong> {{ shrink.result }}{% endif %}</p>
+    <form method="post" action="{{ request.url_for('settings_shrink') }}" hx-post="{{ request.url_for('settings_shrink') }}" hx-target="#task-shrink" hx-swap="outerHTML"><button class="btn">Shrink stored PDFs and pictures</button></form>
+    {% with kind="shrink", t=tasks["shrink"], error=None %}{% include "partials/task.html" %}{% endwith %}
+    <p class="muted">Downsamples images inside stored PDFs to {{ cfg.pdf_image_dpi }} dpi and converts covers and thumbnails to JPEG (quality {{ cfg.jpeg_quality }}). New captures are shrunk automatically{{ '' if cfg.shrink_files else ' (currently off: shrink_files = false)' }}.</p>
     <p class="muted">Adds categories (Dinner, Dessert, Seafood…) from each recipe's title and ingredients. Categories you ticked by hand are kept.</p>
   </section>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+/* Upload a backup with a progress bar: a big zip can take a while on Wi-Fi. */
+(function () {
+  const form = document.getElementById('uploadForm');
+  if (!form || !window.XMLHttpRequest) return;
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const box = document.getElementById('uploadProgress'), bar = document.getElementById('uploadBar'), txt = document.getElementById('uploadText');
+    const mb = (n) => (n / 1048576).toFixed(1) + ' MB';
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', form.action);
+    xhr.upload.onprogress = (ev) => {
+      if (!ev.lengthComputable) return;
+      bar.style.width = Math.round(100 * ev.loaded / ev.total) + '%';
+      txt.textContent = '· ' + mb(ev.loaded) + ' of ' + mb(ev.total);
+    };
+    xhr.onload = () => { window.location = xhr.responseURL || form.action; };
+    xhr.onerror = () => { txt.textContent = '· failed: the connection dropped. Try again.'; };
+    box.hidden = false;
+    form.querySelector('button').disabled = true;
+    xhr.send(new FormData(form));
+  });
+})();
+</script>
 {% endblock %}

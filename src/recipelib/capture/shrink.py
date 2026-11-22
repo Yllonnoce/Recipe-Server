@@ -84,10 +84,10 @@ def shrink_pdf(path: Path, dpi: int | None = None, quality: int | None = None) -
         return before, before
 
 
-def shrink_library(progress=None) -> dict:
+def shrink_library(progress=None, report=None) -> dict:
     """Retroactively shrink every stored PDF, cover and thumbnail. Assets are
     named by their hash, so a changed file is moved to its new name and the
-    row updated. Returns totals in bytes."""
+    row updated. Returns totals in bytes. report(step, done, total) feeds a progress bar."""
     from sqlalchemy import select
 
     from ..capture.pdf import sha256_file
@@ -97,7 +97,9 @@ def shrink_library(progress=None) -> dict:
     totals = {"before": 0, "after": 0, "files": 0, "changed": 0}
     with session_scope() as s:
         assets = list(s.scalars(select(Asset)))
-    for a in assets:
+    for i, a in enumerate(assets):
+        if report:
+            report("Shrinking PDFs and pictures", i, len(assets))
         p = cfg.assets_dir / a.rel_path
         if not p.is_file():
             continue

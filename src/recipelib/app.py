@@ -135,6 +135,27 @@ def create_app() -> FastAPI:
     from .web.routes import assets, capture, cook, library, mealplan, reader, recipe, settings, shopping
     for mod in (library, recipe, reader, cook, capture, assets, settings, shopping, mealplan):
         app.include_router(mod.router)
+
+    @app.middleware("http")
+    async def hold_changes_during_restore(request, call_next):
+        """A restore replaces or merges into the library in one long transaction; a change
+        made meanwhile would fail or be wiped. Reading keeps working."""
+        from . import tasks
+        if request.method not in ("GET", "HEAD", "OPTIONS") and tasks.restoring():
+            import html
+
+            from fastapi.responses import HTMLResponse
+            cur = tasks.current() or {}
+            label = html.escape((cur.get("label") or "restore").lower())   # holds file names and addresses
+            msg = (f"The library is being restored ({label}). "
+                   "Nothing was changed; try again when it has finished, usually within a minute.")
+            if request.headers.get("HX-Request") == "true":
+                return HTMLResponse(f'<p class="flash bad">{msg}</p>', status_code=503, headers={"HX-Reswap": "none"})
+            return HTMLResponse(f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                                f"<title>Restoring</title><p style='font:16px system-ui;max-width:40em;margin:3em auto;padding:0 16px'>"
+                                f"{msg}<br><br><a href='javascript:history.back()'>Go back</a></p>",
+                                status_code=503, headers={"Retry-After": "30"})
+        return await call_next(request)
     return app
 
 

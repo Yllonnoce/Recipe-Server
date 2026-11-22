@@ -275,9 +275,12 @@ def categorize_missing(s: Session) -> int:
     return n
 
 
-def categorize_all(s: Session, replace: bool = False) -> int:
+def categorize_all(s: Session, replace: bool = False, report=None) -> int:
     n = 0
-    for r in s.scalars(select(Recipe).where(Recipe.deleted_at.is_(None))):
+    rows = list(s.scalars(select(Recipe).where(Recipe.deleted_at.is_(None))))
+    for i, r in enumerate(rows):
+        if report:
+            report("Assigning categories", i, len(rows))
         if r.ingredients or r.steps or r.title:
             assign_categories(s, r, replace=replace)
             fts.reindex_recipe(s, r.id)

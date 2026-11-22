@@ -22,7 +22,7 @@ from pathlib import Path
 
 from sqlalchemy import select, text
 
-from . import __version__
+from . import __version__, tasks
 from .config import get_settings
 from .db import fts
 from .db.engine import session_scope
@@ -41,12 +41,18 @@ def backups_dir() -> Path:
 
 # ---------------------------------------------------------------- create
 
-def create_backup(out: Path | None = None, include_assets: bool = True) -> Path:
+def _quiet(step: str | None = None, done: int | None = None, total: int | None = None) -> None:
+    pass
+
+
+def create_backup(out: Path | None = None, include_assets: bool = True, progress=_quiet) -> Path:
+    """progress(step, done, total) is told what is happening, for a progress bar."""
     cfg = get_settings()
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     out = out or (backups_dir() / f"recipelib-{stamp}.zip")
     tmpdir = Path(tempfile.mkdtemp(prefix="rlbackup-", dir=str(cfg.library_dir / "tmp")))
     snap = tmpdir / "recipes.db"
+    progress("Copying the database")
     src = sqlite3.connect(str(cfg.db_path))
     dst = sqlite3.connect(str(snap))
     src.backup(dst)
@@ -63,9 +69,11 @@ def create_backup(out: Path | None = None, include_assets: bool = True) -> Path:
         z.write(snap, "recipes.db")
         z.writestr("manifest.json", json.dumps(manifest, indent=1))
         if include_assets and cfg.assets_dir.exists():
-            for f in sorted(cfg.assets_dir.rglob("*")):
-                if f.is_file():
-                    z.write(f, (Path("assets") / f.relative_to(cfg.assets_dir)).as_posix(), compress_type=zipfile.ZIP_STORED)
+            files = [f for f in sorted(cfg.assets_dir.rglob("*")) if f.is_file()]
+            for i, f in enumerate(files):
+                progress("Packing PDFs and pictures", i, len(files))
+                z.write(f, (Path("assets") / f.relative_to(cfg.assets_dir)).as_posix(), compress_type=zipfile.ZIP_STORED)
+            progress("Packing PDFs and pictures", len(files), len(files))
     part.replace(out)
     shutil.rmtree(tmpdir, ignore_errors=True)
     STATE["last"] = time.time()
@@ -126,9 +134,12 @@ def _rows(con: sqlite3.Connection, sql: str, *args) -> list[dict]:
     return [dict(r) for r in con.execute(sql, args)]
 
 
-def restore(zip_path: Path, mode: str = "merge", overwrite: bool = False) -> RestoreStats:
+def restore(zip_path: Path, mode: str = "merge", overwrite: bool = False, progress=_quiet) -> RestoreStats:
     """mode: 'merge' (add what is missing) or 'replace' (wipe first).
-    overwrite: in merge mode, replace local recipes that match backup ones."""
+    overwrite: in merge mode, replace local recipes that match backup ones.
+    progress(step, done, total) is told what is happening, for a progress bar.
+    Callers run it under tasks.exclusive(..., blocks_writes=True) so nothing else changes
+    the library meanwhile."""
     cfg = get_settings()
     stats = RestoreStats()
     STATE["running"] = True
@@ -138,20 +149,22 @@ def restore(zip_path: Path, mode: str = "merge", overwrite: bool = False) -> Res
             names = set(z.namelist())
             if "recipes.db" not in names:
                 raise ValueError("not a Recipe Library backup (no recipes.db inside)")
+            progress("Reading the backup")
             z.extract("recipes.db", tmpdir)
             # bring an older backup up to the current schema
             from .db.migrate import migrate
             migrate(tmpdir / "recipes.db")
             bcon = sqlite3.connect(str(tmpdir / "recipes.db"))
             # copy asset files (deduplicated by their sha-named paths)
-            for n in names:
-                if n.startswith("assets/") and not n.endswith("/"):
-                    dest = cfg.assets_dir / n[len("assets/"):]
-                    if not dest.exists():
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        with z.open(n) as src, dest.open("wb") as dst:
-                            shutil.copyfileobj(src, dst)
-                        stats.assets_copied += 1
+            asset_names = sorted(n for n in names if n.startswith("assets/") and not n.endswith("/"))
+            for i, n in enumerate(asset_names):
+                progress("Copying PDFs and pictures", i, len(asset_names))
+                dest = cfg.assets_dir / n[len("assets/"):]
+                if not dest.exists():
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    with z.open(n) as src, dest.open("wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    stats.assets_copied += 1
         with session_scope() as s:
             if mode == "replace":
                 _wipe(s)
@@ -160,7 +173,9 @@ def restore(zip_path: Path, mode: str = "merge", overwrite: bool = False) -> Res
             local_by_url = {u: rid for rid, u in s.execute(text(
                 "SELECT id, source_url_norm FROM recipes WHERE deleted_at IS NULL AND source_url_norm IS NOT NULL"))}
             id_map: dict[int, int] = {}
-            for br in _rows(bcon, "SELECT * FROM recipes WHERE deleted_at IS NULL ORDER BY id"):
+            b_recipes = _rows(bcon, "SELECT * FROM recipes WHERE deleted_at IS NULL ORDER BY id")
+            for i, br in enumerate(b_recipes):
+                progress("Merging recipes", i, len(b_recipes))
                 try:
                     match = None
                     b_pdf = _rows(bcon, "SELECT * FROM assets WHERE id = ?", br["pdf_asset_id"])[0] if br["pdf_asset_id"] else None
@@ -191,6 +206,8 @@ def restore(zip_path: Path, mode: str = "merge", overwrite: bool = False) -> Res
                 except Exception as e:  # noqa: BLE001
                     log.exception("restore: recipe %s failed", br.get("title"))
                     stats.errors.append(f"{br.get('title')}: {type(e).__name__}")
+            progress("Merging recipes", len(b_recipes), len(b_recipes))
+            progress("Merging the meal plan and shopping list")
             stats.plan_added = _import_plan(s, bcon, id_map)
             stats.shopping_added = _import_shopping(s, bcon)
         bcon.close()
@@ -318,8 +335,13 @@ class AutoBackup:
         while not self._stop.is_set():
             try:
                 if time.time() - self._latest() >= self.every:
-                    create_backup()
-                    prune(self.keep)
+                    with tasks.exclusive("backup", "Automatic backup") as report:
+                        create_backup(progress=report)
+                        prune(self.keep)
+            except tasks.Busy as e:
+                log.info("automatic backup put off: %s", e)
+                self._stop.wait(600)
+                continue
             except Exception:  # noqa: BLE001
                 log.exception("automatic backup failed")
             self._stop.wait(3600)

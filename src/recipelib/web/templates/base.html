@@ -69,6 +69,17 @@
   paint();
 })();
 </script>
+<div id="toast" class="toast" role="status" hidden></div>
+<script>
+/* A change refused while a restore runs (503) or any other failed htmx request: say so instead of doing nothing. */
+document.body.addEventListener('htmx:responseError', (e) => {
+  const x = e.detail.xhr, t = document.getElementById('toast');
+  // DOMParser builds an inert document: no scripts or event handlers run while reading the text out
+  const said = new DOMParser().parseFromString(x.responseText || '', 'text/html').body.textContent.trim();
+  t.textContent = x.status === 503 ? (said || 'The library is busy; try again shortly.') : 'That did not work (error ' + x.status + '). Try again.';
+  t.hidden = false; clearTimeout(t._h); t._h = setTimeout(() => { t.hidden = true; }, 6000);
+});
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

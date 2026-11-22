@@ -16,6 +16,8 @@ def library(tmp_path, monkeypatch):
     monkeypatch.setenv("RECIPELIB_OCR_ENABLED", "false")
     monkeypatch.setenv("RECIPELIB_WATCH_INTERVAL", "0.3")
     monkeypatch.setenv("RECIPELIB_WORKERS", "1")
+    from recipelib import tasks
+    tasks.clear()
     from recipelib.config import get_settings
     cfg = get_settings(reload=True)
     cfg.ensure_dirs()

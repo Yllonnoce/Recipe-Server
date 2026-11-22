@@ -102,7 +102,9 @@ def sync_once(url: str | None = None, mode: str | None = None) -> str:
     STATE.update(running=True, source=url)
     try:
         zip_path = pull_backup(url, B.backups_dir())
-        stats = B.restore(zip_path, mode="replace" if mode == "replace" else "merge", overwrite=True)
+        from . import tasks
+        with tasks.exclusive("mirror", "Syncing from the backup server", blocks_writes=True) as report:
+            stats = B.restore(zip_path, mode="replace" if mode == "replace" else "merge", overwrite=True, progress=report)
         # keep only the newest mirror zips so the disk doesn't fill
         olds = sorted(B.backups_dir().glob("mirror-*.zip"), key=lambda p: p.stat().st_mtime, reverse=True)[3:]
         for o in olds:

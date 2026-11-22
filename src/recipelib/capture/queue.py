@@ -99,6 +99,9 @@ class JobQueue:
 
     # ---- worker loop -------------------------------------------------------
     def _claim(self) -> int | None:
+        from .. import tasks
+        if tasks.restoring():       # the library is being replaced or merged into; start nothing
+            return None
         now = utcnow()
         with self._claim_lock, session_scope() as s:
             j = s.scalars(

@@ -16,7 +16,7 @@
   <table class="kv">
     {% if test %}<tr><th>Test</th><td>{{ test }}</td></tr>{% endif %}
     <tr><th>Status</th><td>
-      {% if push.running %}<span class="spin"></span> sending to {{ push.target }}…
+      {% if push.running %}<span class="spin"></span> sending to {{ push.target }}…<div class="bar"><div class="fill"></div></div>
       {% elif push.result %}{{ '✅' if push.last_ok else '⚠️' }} {{ push.result }}
       {% elif cfg.push_to %}nothing sent yet (first send a few minutes after startup, then every {{ cfg.push_interval_hours|int }} h)
       {% else %}off{% endif %}

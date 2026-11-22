@@ -20,7 +20,7 @@
       <button class="btn" type="button" hx-post="{{ request.url_for('settings_ollama_test') }}" hx-include="closest form" hx-target="#ollama" hx-swap="outerHTML">Test connection</button>
       <button class="btn" type="button" hx-post="{{ request.url_for('settings_ollama_pull') }}" hx-include="closest form" hx-target="#ollama" hx-swap="outerHTML" {{ 'disabled' if pull.running or not (test and test.ok) }} title="Download the model on that machine">Pull model there</button>
       <button class="btn" type="button" hx-post="{{ request.url_for('settings_ollama_scan') }}" hx-target="#ollama" hx-swap="outerHTML" hx-indicator="#scanSpin" title="Look for machines on this network running Ollama">Find Ollama on my network</button>
-      <span id="scanSpin" class="htmx-indicator"><span class="spin"></span> scanning…</span>
+      <span id="scanSpin" class="htmx-indicator scan-ind"><span class="spin"></span> scanning the network, a few seconds…<span class="bar"><span class="fill"></span></span></span>
     </div>
   </form>
   <table class="kv">
