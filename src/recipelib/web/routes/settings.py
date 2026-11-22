@@ -206,7 +206,14 @@ def shrink_files(request: Request):
 
     def run(report):
         t = shrink_library(report=report)
-        return f"{t['files']} files looked at, {t['changed']} shrunk, {(t['before'] - t['after']) / 1048576:.1f} MB saved"
+        msg = f"{t['files']} files looked at, {t['changed']} shrunk, {(t['before'] - t['after']) / 1048576:.1f} MB saved"
+        if t.get("merged"):
+            msg += f"; {t['merged']} duplicate picture(s) merged"
+        if t.get("repaired"):
+            msg += f"; {t['repaired']} missing thumbnail(s) redrawn"
+        if t.get("problems"):
+            msg += f"; {t['problems']} file(s) could not be renamed (see the log)"
+        return msg
     return _start(request, "shrink", "Shrinking stored PDFs and pictures", run)
 
 
