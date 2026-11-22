@@ -15,13 +15,16 @@
 <div class="cards">
 {% for r in recipes %}
   <a class="card status-{{ r.status }}" href="{{ request.url_for('recipe_detail', recipe_id=r.id) }}"
-     {% if r.status == 'processing' %}hx-get="{{ request.url_for('library_cards') }}?q={{ f.q|urlencode }}&tag={{ (f.tag or '')|urlencode }}&fav={{ '1' if f.favorites else '' }}&status={{ f.status or '' }}&page={{ f.page }}" hx-trigger="every 3s" hx-target="#cards"{% endif %}>
+     {% if r.status == 'processing' %}hx-get="{{ request.url_for('library_cards') }}?q={{ f.q|urlencode }}&tag={{ (f.tag or '')|urlencode }}&fav={{ '1' if f.favorites else '' }}&status={{ f.status or '' }}&sort={{ f.sort }}&page={{ f.page }}" hx-trigger="every 3s" hx-target="#cards"{% endif %}>
     <div class="cover">
       {% if r.cover_asset_id %}<img src="{{ request.url_for('asset', asset_id=r.cover_asset_id) }}" alt="" loading="lazy">
       {% elif r.thumb_asset_id %}<img class="page" src="{{ request.url_for('asset', asset_id=r.thumb_asset_id) }}" alt="" loading="lazy">
       {% else %}<div class="placeholder">🍽</div>{% endif %}
       {% if r.favorite %}<span class="heart">♥</span>{% endif %}
-      {% if r.status != 'ready' %}<span class="badge {{ r.status }}">{{ status_label[r.status] }}</span>{% endif %}
+      {% set p = (progress or {}).get(r.id) %}
+      {% if p %}<span class="badge {{ 'waiting_llm' if p.state == 'waiting_llm' else 'processing' }}">{{ p.short }}{% if p.elapsed %} · {{ p.elapsed }}{% endif %}</span>
+      {% if p.state != 'waiting_llm' %}<span class="card-bar"><span class="fill"></span></span>{% endif %}
+      {% elif r.status != 'ready' %}<span class="badge {{ r.status }}">{{ status_label[r.status] }}</span>{% endif %}
     </div>
     <div class="meta">
       <h3>{{ r.title }}</h3>

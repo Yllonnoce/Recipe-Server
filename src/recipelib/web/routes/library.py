@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
+from ...capture import progress
 from ...db.engine import get_db
 from ...domain import recipes as R
 from ...domain.categories import NAMES as CATEGORY_NAMES
@@ -30,6 +31,7 @@ def library(request: Request, s: Session = Depends(get_db)):
     return templates.TemplateResponse(request, "pages/library.html", {
         "recipes": rows, "total": total, "f": f, "tags": R.tag_counts(s), "category_names": CATEGORY_NAMES,
         "status_counts": R.status_counts(s), "pages": (total + f.per_page - 1) // f.per_page,
+        "progress": progress.for_recipes(s, [r.id for r in rows if r.status == "processing"]),
     })
 
 
@@ -39,4 +41,5 @@ def cards(request: Request, s: Session = Depends(get_db)):
     rows, total = R.list_recipes(s, f)
     return templates.TemplateResponse(request, "partials/cards.html", {
         "recipes": rows, "total": total, "f": f, "pages": (total + f.per_page - 1) // f.per_page,
+        "progress": progress.for_recipes(s, [r.id for r in rows if r.status == "processing"]),
     })

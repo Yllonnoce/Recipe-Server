@@ -1,0 +1,16 @@
+{# Inside the "processing" banner on a recipe page; the banner re-fetches the page every 3s. #}
+{% if not progress %}
+  Still working on this one: reading the PDF and pulling out the recipe…
+{% elif progress.state == 'waiting_llm' %}
+  <strong>Waiting for Ollama.</strong> The PDF is read; the model could not be reached{% if progress.retry_in %}, trying again in {{ progress.retry_in }}{% endif %}.
+  {% if progress.error %}<div class="muted">{{ progress.error[:200] }}</div>{% endif %}
+  <div class="muted">Check the address under <a href="{{ request.url_for('settings') }}#ollama-panel">Settings → Recipe extraction</a>.</div>
+{% else %}
+  <span class="spin"></span> Still working on this one{% if progress.elapsed %} · {{ progress.elapsed }}{% endif %}
+{% endif %}
+{% if progress %}
+<ol class="progress">
+  {% for st in progress.steps %}<li class="{{ st.state }}"><span class="dot"></span>{{ st.label }}</li>{% endfor %}
+</ol>
+{% if progress.state != 'waiting_llm' %}<div class="bar"><div class="fill"></div></div>{% endif %}
+{% endif %}

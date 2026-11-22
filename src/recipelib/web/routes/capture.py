@@ -5,6 +5,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ...capture import progress
 from ...capture.queue import get_queue
 from ...capture.sources.upload import stage_images_as_one, stage_upload
 from ...config import get_settings
@@ -20,7 +21,7 @@ def _jobs(s: Session, limit: int = 60) -> list[dict]:
     out = []
     for j in rows:
         r = s.get(Recipe, j.recipe_id) if j.recipe_id else None
-        out.append({"j": j, "r": r if (r and not r.deleted_at) else None})
+        out.append({"j": j, "r": r if (r and not r.deleted_at) else None, "p": progress.for_job(j)})
     return out
 
 

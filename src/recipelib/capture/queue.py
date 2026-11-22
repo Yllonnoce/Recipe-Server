@@ -61,11 +61,13 @@ class JobQueue:
     # ---- enqueue -----------------------------------------------------------
     def enqueue(self, source: str, *, pdf_path: str | None = None, url: str | None = None,
                 title_hint: str | None = None, ipp_job_id: int | None = None,
-                force: bool = False, priority: int = 0) -> int:
+                force: bool = False, priority: int = 0, recipe_id: int | None = None) -> int:
+        """`recipe_id` makes the job update that recipe instead of creating one. It is
+        stored with the job so a worker can never pick the job up without it."""
         with session_scope() as s:
             j = CaptureJob(source=source, input_path=pdf_path, input_url=url, title_hint=title_hint,
                            ipp_job_id=ipp_job_id, force=1 if force else 0, priority=priority,
-                           state="queued", created_at=utcnow())
+                           recipe_id=recipe_id, state="queued", created_at=utcnow())
             j.log("queued")
             s.add(j)
             s.flush()

@@ -26,9 +26,11 @@ def _is_htmx(request: Request) -> bool:
 
 @router.get("/{recipe_id}", name="recipe_detail")
 def detail(recipe_id: int, request: Request, s: Session = Depends(get_db)):
+    from ...capture import progress
     r = _get(s, recipe_id)
     return templates.TemplateResponse(request, "pages/recipe.html", {
         "r": r, "bookmarks": R.bookmark_views(r),
+        "progress": progress.for_recipe(s, r.id) if r.status == "processing" else None,
     })
 
 
@@ -122,14 +124,8 @@ def reextract(recipe_id: int, request: Request, s: Session = Depends(get_db)):
     q = get_queue()
     r.status = "processing"
     s.commit()
-    jid = q.enqueue("upload" if not r.source_url else "url", pdf_path=str(path), url=r.source_url,
-                    title_hint=r.title, force=True, priority=5)
-    # link the job to this recipe so the pipeline updates it instead of creating a new one
-    from ...db.models import CaptureJob
-    j = s.get(CaptureJob, jid)
-    if j is not None:
-        j.recipe_id = r.id
-        s.commit()
+    q.enqueue("upload" if not r.source_url else "url", pdf_path=str(path), url=r.source_url,
+              title_hint=r.title, force=True, priority=5, recipe_id=r.id)
     return RedirectResponse(request.url_for("recipe_detail", recipe_id=r.id), status_code=303)
 
 

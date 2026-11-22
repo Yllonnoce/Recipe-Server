@@ -13,7 +13,7 @@
     <div class="head-text">
       <h1>{{ r.title }}</h1>
       {% if r.status == 'processing' %}
-        <div class="banner processing" hx-get="{{ request.url_for('recipe_detail', recipe_id=r.id) }}" hx-trigger="every 3s" hx-select="article.recipe" hx-target="closest article" hx-swap="outerHTML">Still working on this one: reading the PDF and pulling out the recipe…</div>
+        <div class="banner processing" hx-get="{{ request.url_for('recipe_detail', recipe_id=r.id) }}" hx-trigger="every 3s" hx-select="article.recipe" hx-target="closest article" hx-swap="outerHTML">{% include "partials/extract_progress.html" %}</div>
       {% elif r.status == 'needs_review' %}
         <div class="banner review">The recipe text could not be fully extracted. <a href="{{ request.url_for('recipe_edit', recipe_id=r.id) }}">Review and fix it</a> with the PDF alongside, or <form class="inline" method="post" action="{{ request.url_for('recipe_reextract', recipe_id=r.id) }}"><button class="linklike">try extracting again</button></form>.</div>
       {% elif r.status == 'failed' %}
